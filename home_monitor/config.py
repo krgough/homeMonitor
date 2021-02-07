@@ -11,7 +11,7 @@ BELL_SOUND = None
 BELL_BUTTON_ID = None
 
 INDICATOR_BULB = "Sitt Colour"
-TRAIN_DELAY_INDICATION_SCHEDULE = [("06:00", "18:00")]
+TRAIN_DELAY_INDICATION_SCHEDULE = [("06:00", "08:00")]
 LOGFILE = "/tmp/home_monitor.log"
 
 LED_PORT = "/dev/ttyS0"
