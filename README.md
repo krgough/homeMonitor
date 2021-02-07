@@ -1,11 +1,42 @@
 # homeMonitor
 
-Uses ZigBee USB running AT command App to monitor and control ZigBee devices in the home.   We have a speaker attached to the rPi audio port so that we can use a text to speach
+Uses ZigBee USB devices running AT command firmware to monitor and control ZigBee devices in the home.   We have a speaker attached to the rPi audio port so that we can use a text to speech to read out train delay and other information.
 
-We have implemented the following functions:
+We have a second rPi close the hot water cylinder that monitors temperature sensors on the cylinder.  We then make an approximation of the 45'C level in the tank as a percentage.  We have a UDP listener running on the rPi that will send the hot-water level on receipt of the command "uwl=?" (usable hot water level)
+
+```
+                      HIVE_ZIGBEE_USB < zigbee > HIVE DEVICES (Bulbs etc)
+                     /
+                    /
+HOME_MONITOR_RPI - - - BUTTON-ZIGBEE_USB < zigbee > Button, Garage Plug (to act as range extended), Freezer Temp Sensor
+                    \
+                     \
+                      < udp command/response > HOT_WATER_RPI <> Temperature sensors on cylinder
+```
+
+On the home monitoring system we have implemented the following functions that are triggered by presses of the ZigBee button:
 
 *   shortPress on ZigBee button - Toggle sitting room lights on/off
-*   doublePress on ZigBee button - Read out the current delays status (we 
+*   doublePress on ZigBee button - Announce current delays status.
+*   longPress on ZigBee button - Announce the hot water level.  
+
+```
+USAGE: home_monitor.py [-h] [-l] [-b] [-g] [-z] -t to_station -f from_station
+
+Use these command line options:
+
+-h                      Print this help
+-l                      Show delays on HH360 LED indicator board
+-b                      Show delays on hive colour bulb
+                        See apiConfig.py for login details
+
+-g                      Monitor gpio button presses
+                        Make announcement if button presssed)
+
+-z                      Announce delays on zigbee button press
+-t 'to' stationId       CRS code for station e.g. wat for Waterloo
+-f 'from' stationId     CRS code for station
+```
 
 ### ZigBee USB Setup:
 
