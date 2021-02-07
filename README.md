@@ -55,7 +55,7 @@ We have several module that can be used as follows:
 
 *   home\_monitor.py - The main program.  Start this using the startWinToWatTrainMonotor.sh from CRON
 *   gpio\_monitor.py - Monitors a physical switch connection on a gpio line on the rPi.  Can use this to trigger reports.
-*   startGpioMonitor.sh - script to check if gpio\_monitor.py is running and if not then start it (Use this from CRON to keep the monitor running)
+*   startGpioMonitor.sh - script to check if gpio\_monitor.py is running (Use this from CRON)
 *   button\_listener.py - Listens for incoming commands or attribute reports on the private ZigBee network.
 *   led\_pattern\_generator.py - Generates nice patterns on a Hive Sense LED indicator ring.  LED ring needs to be attached via UART to the rPi.
 *   train\_times.py - Use the Huxley API (wraps the Network Rail soap API with a rest API) to get train data.
@@ -77,4 +77,5 @@ git clone https://github.com/krgough/telemetryModule.git
 # KG: Hot water level UDP server
 * * * * * /home/pi/repositories/telemetry/create_hot_water_udp_server.sh > /dev/null 2>&1
 ```
-   d
+
+d
