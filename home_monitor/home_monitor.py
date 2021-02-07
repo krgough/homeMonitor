@@ -33,7 +33,7 @@ import logging.config
 import random
 import yaml
 
-import hot_water_udp_client as udp_cli
+import udpcomms.hot_water_udp_client as udp_cli
 import zigbeetools.threaded_serial as at
 
 import train_times as tt
