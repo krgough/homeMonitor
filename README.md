@@ -18,7 +18,7 @@ On the home monitoring system we have implemented the following functions that a
 
 *   shortPress on ZigBee button - Toggle sitting room lights on/off
 *   doublePress on ZigBee button - Announce current delays status.
-*   longPress on ZigBee button - Announce the hot water level.  
+*   longPress on ZigBee button - Announce the hot water level.
 
 ```
 USAGE: home_monitor.py [-h] [-l] [-b] [-g] [-z] -t to_station -f from_station
@@ -49,7 +49,7 @@ We use our own network for the button and the temperature sensor to prevent the 
 
 ### Configuration
 
-Config.py contains all the configuration.
+Config.py contains all the configuration parameters.
 
 We have several module that can be used as follows:
 
@@ -61,3 +61,19 @@ We have several module that can be used as follows:
 *   train\_times.py - Use the Huxley API (wraps the Network Rail soap API with a rest API) to get train data.
 *   test\_delays.yaml.old - Test data in a yaml file.  Rename to remove 'old' to use it.
 *   zigbee\_methods.py - Module that handles all the interactions with ZigBee devices on the Hive network.
+
+### Hot Water RPI Setup
+
+```
+# Clone the telemetry repo and then setup CRON to read the temperature values and run the UDP listener (server).
+git clone https://github.com/krgough/telemetryModule.git
+
+# CRONTAB Entries
+
+# KG: Hot water cylinder data logging
+*
+/10 * * * * /home/pi/repositories/telemetry/cylinder_read.py -s > /dev/null 2>&1
+
+# KG: Hot water level UDP server
+* * * * * /home/pi/repositories/telemetry/create_hot_water_udp_server.sh > /dev/null 2>&1
+```
