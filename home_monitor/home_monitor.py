@@ -389,15 +389,13 @@ def button_press(cmd, colour_bulb, sitt_group, hive_indication, voice_strings):
                         "This is Robo Dad.  Go and have a shower!",
                         "Hot water is at {}.".format(uwl)]
 
-            msg = random.choice(messages)
-
             colour_bulb.freezer_alarm_enabled = \
                 not colour_bulb.freezer_alarm_enabled
 
             if colour_bulb.freezer_alarm_enabled:
-                fr_msg = "Freezer alarm On"
+                fr_msg = "Freezer Alarm, On"
             else:
-                fr_msg = 'Freezer alarm Off'
+                fr_msg = 'Freezer Alarm, Off'
 
             msg = [messages[2], fr_msg]
 
@@ -473,7 +471,8 @@ def button_press_handler(button_press_queue, hive_indication, voice_strings):
             # If bulb is blue and the timer expires then make the bulb white
             # Timer will expire if not being reset every 10mins by a high
             # temperature report.
-            if time.time() > freezer_alarm_set + (12 * 60):
+            if (colour_bulb.is_blue() and
+                    time.time() > freezer_alarm_set + (12 * 60)):
                 colour_bulb.set_white(colour_temp=2700, value=100)
 
             time.sleep(0.1)  # Delay to allow last command to take effect

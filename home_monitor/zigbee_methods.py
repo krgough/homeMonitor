@@ -345,7 +345,7 @@ class BulbObject(OnOffObject):
         self.set_colour(hue=0, value=100)
 
     def is_red(self):
-        """ Check if the bulb is red
+        """ Check if the bulb is red and on
         """
         state = self.get_state()
         if state is None:
@@ -354,6 +354,20 @@ class BulbObject(OnOffObject):
 
         if (state['c_mode'] == 'COLOUR'
                 and state['hue'] == 0
+                and state['state'] == 1):
+            return True
+        return False
+
+    def is_blue(self):
+        """ Check if the bulb is blue and on
+        """
+        state = self.get_state()
+        if state is None:
+            LOGGER.error("Bulb state check failed in is_blue()")
+            return False
+
+        if (state['c_mode'] == 'COLOUR'
+                and state['hue'] == 240
                 and state['state'] == 1):
             return True
         return False
