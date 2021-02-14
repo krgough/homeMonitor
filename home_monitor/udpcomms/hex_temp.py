@@ -15,7 +15,6 @@ def convert_s16(hex_value):
 
 if __name__ == "__main__":
     try:
-    	print(convert_s16(int(sys.argv[1], 16)))
+        print(convert_s16(int(sys.argv[1], 16)))
     except IndexError:
         print("No hex number provided")
-

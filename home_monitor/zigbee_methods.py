@@ -127,6 +127,11 @@ class BulbObject(OnOffObject):
         # will be cleared later if app confirms no alert state
         self.alert_active = self.is_red()
 
+        # We use Blue to indicate a freezer over temp alert
+        # We have a freezer_alert_enabled parameter to allow us to turn the
+        # the freezer alarm on/off.
+        self.freezer_alarm_enabled = True
+
     def get_color_mode(self):
         """ Find out if bulb is in colour mode or in white mode
         """
@@ -352,6 +357,15 @@ class BulbObject(OnOffObject):
                 and state['state'] == 1):
             return True
         return False
+
+    def set_blue(self):
+        """ Turn bulb on and set it to blue at 100%
+        """
+        # Turn bulb on
+        self.set_on_off(1)
+
+        # Set the colour
+        self.set_colour(hue=240, value=100)
 
 
 class Group:

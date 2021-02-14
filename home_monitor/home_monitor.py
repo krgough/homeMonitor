@@ -17,8 +17,6 @@ PEP8 Updates.
 
 '''
 
-# Using strings for function block comments
-# pylint: disable=pointless-string-statement
 
 import os
 import sys
@@ -44,8 +42,6 @@ import config as cfg
 import zigbee_methods as api  # Control using Zigbee AT commands
 import gpio_monitor as gm
 
-
-DEBUG = False
 
 CHECK_THREAD_STOP = threading.Event()
 THREAD_POOL = []
@@ -394,7 +390,16 @@ def button_press(cmd, colour_bulb, sitt_group, hive_indication, voice_strings):
                         "Hot water is at {}.".format(uwl)]
 
             msg = random.choice(messages)
-            msg = messages[2]
+
+            colour_bulb.freezer_alarm_enabled = \
+                not colour_bulb.freezer_alarm_enabled
+
+            if colour_bulb.freezer_alarm_enabled:
+                fr_msg = "Freezer alarm On"
+            else:
+                fr_msg = 'Freezer alarm Off'
+
+            msg = [messages[2], fr_msg]
 
             LOGGER.debug("Button Long Press: Playing msg")
             voice_strings.play([msg])
@@ -455,6 +460,21 @@ def button_press_handler(button_press_queue, hive_indication, voice_strings):
             if cmd["nodeId"] == cfg.BELL_BUTTON_ID:
                 LOGGER.debug("Doorbell button press.  Playing doorbell sound.")
                 doorbell_press(colour_bulb)
+
+            # Set the bulb blue if temp threshold is crossed.
+            # Start a timer.  Reset the bulb if the timer expires
+            if cmd["nodeId"] == cfg.FREEZER_TEMP_ID:
+                LOGGER.debug("TEMPERATURE REPORT %s", cmd['temperature'])
+                if (cmd['temperature'] > cfg.FREEZER_TEMP_THOLD and
+                        colour_bulb.freezer_alarm_enabled):
+                    colour_bulb.set_blue()
+                    freezer_alarm_set = time.time()
+
+            # If bulb is blue and the timer expires then make the bulb white
+            # Timer will expire if not being reset every 10mins by a high
+            # temperature report.
+            if time.time() > freezer_alarm_set + (12 * 60):
+                colour_bulb.set_white(colour_temp=2700, value=100)
 
             time.sleep(0.1)  # Delay to allow last command to take effect
 
@@ -594,7 +614,6 @@ def main():
         button_press_queue = queue.Queue()
 
         # Start the button press listener
-        # Listener checks it's own serial threads are alive
         start_thread(bl.main,
                      (cfg.ZB_PORT, cfg.ZB_BAUD, button_press_queue),
                      'Button Listener',
@@ -621,7 +640,6 @@ def main():
 
     # Check the threads are all still running
     while True:
-        # Check all threads are running
         for thd in thread_pool:
             if not thd.isAlive():
                 LOGGER.debug("ERROR: THREAD HAS STOPPED: %s", thd.name)

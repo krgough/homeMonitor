@@ -34,7 +34,11 @@ GPIO_CHANNEL = 4
 ZB_PORT = "/dev/BUTTON_DONGLE"
 HIVE_ZB_PORT = "/dev/HIVE_DONGLE"
 ZB_BAUD = 115200
-BUTTON_NODE_ID = "7967"  # Black Button
+
+BUTTON_NODE_ID = "7967"   # Black Button
+FREEZER_TEMP_ID = "C23A"  # Freezer temperature sensor
+FREEZER_TEMP_THOLD = -10  # Freezer temperature alert threshold
+
 
 SITT_GROUP = ['Sitt Front', 'Sitt Rear', 'Sitt Colour']
 

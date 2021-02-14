@@ -32,6 +32,8 @@ import re
 import logging
 import serial
 
+from udpcomms import hex_temp
+
 LOGGER = logging.getLogger(__name__)
 ZIGBEE_DEBUG = False
 RX_QUEUE = queue.Queue()
@@ -117,6 +119,8 @@ def main(port, baud, button_press_q):
                 # On Contact we are moitoring temperature
                 node_id = msg.split(':')[1][:4]
                 temperature = msg.split(",")[-1]
+                temperature = hex_temp.convert_s16(temperature)
+
                 button_press_q.put({"nodeId": node_id,
                                     "temperature": temperature})
 

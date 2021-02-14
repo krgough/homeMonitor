@@ -5,13 +5,13 @@ Uses ZigBee USB devices running AT command firmware to monitor and control ZigBe
 We have a second rPi close the hot water cylinder that monitors temperature sensors on the cylinder.  We then make an approximation of the 45'C level in the tank as a percentage.  We have a UDP listener running on the rPi that will send the hot-water level on receipt of the command "uwl=?" (usable hot water level)
 
 ```
-                      HIVE_ZIGBEE_USB < zigbee > HIVE DEVICES (Bulbs etc)
+                       HIVE_ZIGBEE_USB < zigbee > HIVE DEVICES (Bulbs etc)
                      /
                     /
-HOME_MONITOR_RPI - - - BUTTON-ZIGBEE_USB < zigbee > Button, Garage Plug (to act as range extended), Freezer Temp Sensor
+HOME_MONITOR_RPI - - - ZIGBEE_USB < zigbee > Button, Garage Plug (to act as range extended), Freezer Temp Sensor
                     \
                      \
-                      < udp command/response > HOT_WATER_RPI <> Temperature sensors on cylinder
+                       HOT_WATER_UDP_CLIENT < udp command/response > RPI_HOT_WATER_UDP_SERVER <> Temperature sensors on cylinder
 ```
 
 On the home monitoring system we have implemented the following functions that are triggered by presses of the ZigBee button:
@@ -78,4 +78,4 @@ git clone https://github.com/krgough/telemetryModule.git
 * * * * * /home/pi/repositories/telemetry/create_hot_water_udp_server.sh > /dev/null 2>&1
 ```
 
-d
+-
