@@ -402,7 +402,7 @@ def button_press(cmd, colour_bulb, sitt_group, hive_indication, voice_strings):
             msg = [messages[2], fr_msg]
 
             LOGGER.debug("Button Long Press: Playing msg")
-            voice_strings.play([msg])
+            voice_strings.play(msg)
             # play_voice_strings([msg])
 
         # Get initial bulb state (if hive_indication and we can get a bulb
@@ -543,7 +543,7 @@ class Voice():
         voice_strings = msg if msg else self.strings
         voice_string = '. '.join(voice_strings)
 
-        print(voice_string)
+        LOGGER.debug(voice_string)
         # Form the complete command
         temp_voice_file = '/tmp/voicefile.wav'
         cmd = 'pico2wave -l en-GB -w {tvf} "{vs}" && aplay {tvf} &'.format(
