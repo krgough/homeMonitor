@@ -392,10 +392,11 @@ def button_press(cmd, colour_bulb, sitt_group, hive_indication, voice_strings):
             colour_bulb.freezer_alarm_enabled = \
                 not colour_bulb.freezer_alarm_enabled
 
+            print(colour_bulb.freezer_alarm_enabled)
             if colour_bulb.freezer_alarm_enabled:
-                fr_msg = "Freezer Alarm: On"
+                fr_msg = "Freezer Alarm: On."
             else:
-                fr_msg = 'Freezer Alarm: Off'
+                fr_msg = 'Freezer Alarm: Off.'
 
             msg = [messages[2], fr_msg]
 
