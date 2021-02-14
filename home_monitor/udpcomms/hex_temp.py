@@ -10,11 +10,12 @@ import sys
 def convert_s16(hex_value):
     """ Convert a 16bit signed hex value to decimal
     """
-    return -(hex_value & 0x8000) | (hex_value & 0x7fff)
+    h_val = int(hex_value, 16)
+    return -(h_val & 0x8000) | (h_val & 0x7fff)
 
 
 if __name__ == "__main__":
     try:
-        print(convert_s16(int(sys.argv[1], 16)))
+        print(convert_s16(sys.argv[1]))
     except IndexError:
         print("No hex number provided")

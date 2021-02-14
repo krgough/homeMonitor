@@ -119,7 +119,7 @@ def main(port, baud, button_press_q):
                 # On Contact we are moitoring temperature
                 node_id = msg.split(':')[1][:4]
                 temperature = msg.split(",")[-1]
-                temperature = hex_temp.convert_s16(temperature)
+                temperature = hex_temp.convert_s16(temperature)/100
 
                 button_press_q.put({"nodeId": node_id,
                                     "temperature": temperature})
