@@ -154,7 +154,8 @@ class BulbObject(OnOffObject):
         return resp_value
 
     def get_hue(self):
-        """ Retrieve the current colour value (mireds)
+        """ Retrieve the current colour value as Hue.
+            Hue is on colour wheel 0=RED, 120=Green, 240=Blue
         """
         cluster = at.cluster_object("Color Control Cluster", "server")
         attribute = at.attribute_object("Color Control Cluster", "currentHue")
@@ -167,7 +168,8 @@ class BulbObject(OnOffObject):
             LOGGER.error("Error getting currentHue")
             return None
 
-        resp_value = int(resp_value, 16)
+        # Convert to Hue in degrees (0-360)
+        resp_value = round(int(resp_value, 16) * 360 / 254)
 
         return resp_value
 
@@ -262,7 +264,8 @@ class BulbObject(OnOffObject):
     def set_colour(self, hue, value):
         """ Turn bulb on with given hue and value (brightness)
             Hue: R=0, G=120, B=240 (colour wheel)
-            Value: 0-100
+            S = Saturation = Fixed at FE i.e. max.
+            V = Value = 0-100 (i.e. intensity)
         """
         send_mode = 0
         sat = 'FE'  # Max saturation
