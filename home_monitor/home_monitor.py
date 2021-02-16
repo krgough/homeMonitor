@@ -444,7 +444,6 @@ def button_press_handler(button_press_queue, hive_indication, voice_strings):
 
         # Sleep to avoid while loop spinning in this thread
         time.sleep(0.1)
-        print('Here')
 
 
 class Voice():
