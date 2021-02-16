@@ -466,27 +466,18 @@ class SensorObject:
         self.last_indication = time.time()
 
     def set_temperature(self, temperature):
-        """ Update the object settings
-            This is intended to be a provate class function
+        """ Update the temperature, temp_high and last_report
+
         """
-        LOGGER.debug(temperature)
-        if self.temp:
-            self.temp = temperature
-            self.last_report = time.time()
+        self.temp = temperature
+        self.last_report = time.time()
 
-            if self.temp > cfg.FREEZER_TEMP_THOLD:
-                self.temp_high = True
+        if self.temp > cfg.FREEZER_TEMP_THOLD:
+            self.temp_high = True
 
-            # 1'C Hysteresis on the reset of temp_high
-            if self.temp_high and self.temp < (cfg.FREEZER_TEMP_THOLD - 1):
-                self.temp_high = False
-
-        # If no report for more than 1hr then set temp to None
-        # we use None temp as a flag to show sensor_offline
-        elif time.time() > self.last_report + (60 * 1):
-            self.temp = None
-
-        LOGGER.debug(self.temp)
+        # 1'C Hysteresis on the reset of temp_high
+        if self.temp_high and self.temp < (cfg.FREEZER_TEMP_THOLD - 1):
+            self.temp_high = False
 
     def indicate(self):
         """ Timer to decide if we should re-indicate
@@ -511,6 +502,10 @@ class SensorObject:
                 if device_offline then show_green
 
         """
+        # If last_report is stale (older than 1hr) then set temperature to None
+        # This is our flag that device is offline
+        if time.time() > self.last_report + (60 * 1):
+            self.temp = None
 
         # If we are not enabled and temperture is low then enable the alarm
         if not self.alarm_enabled and not self.temp_high:
