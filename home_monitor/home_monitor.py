@@ -356,7 +356,7 @@ def button_press(cmd, colour_bulb, sitt_group, freezer_sensor, voice_strings):
                         "Hot water is at {}.".format(uwl)]
 
             if colour_bulb.is_green() or colour_bulb.is_blue():
-                colour_bulb.set_white()
+                colour_bulb.set_white(colour_temp=2700, value=100)
 
                 freezer_sensor.alarm_enabled = not freezer_sensor.alarm_enabled
 
