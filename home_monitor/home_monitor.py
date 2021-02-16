@@ -362,7 +362,7 @@ def button_press(cmd, colour_bulb, sitt_group, freezer_sensor, voice_strings):
                 LOGGER.debug("Freezer Alarm Enabled = %s",
                              freezer_sensor.alarm_enabled)
 
-            if colour_bulb.freezer_alarm_enabled:
+            if freezer_sensor.alarm_enabled:
                 fr_msg = "Freezer Alarm: Enabled."
             else:
                 fr_msg = 'Freezer Alarm: Off.'
