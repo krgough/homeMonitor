@@ -367,7 +367,7 @@ def button_press(cmd, colour_bulb, sitt_group, freezer_sensor, voice_strings):
             else:
                 fr_msg = 'Freezer Alarm: Off.'
 
-            fr_msg += "Freezer Temperatue is {}".format(freezer_sensor.temp)
+            fr_msg += " Freezer Temperatue is {}".format(freezer_sensor.temp)
 
             LOGGER.debug(fr_msg)
             msg = [messages[2], fr_msg]
