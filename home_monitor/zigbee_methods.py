@@ -347,6 +347,24 @@ class BulbObject(OnOffObject):
         # Set the colour
         self.set_colour(hue=0, value=100)
 
+    def set_blue(self):
+        """ Turn bulb on and set it to blue at 100%
+        """
+        # Turn bulb on
+        self.set_on_off(1)
+
+        # Set the colour
+        self.set_colour(hue=240, value=100)
+
+    def set_green(self):
+        """ Turn bulb on and set it to green at 100%
+        """
+        # Turn bulb on
+        self.set_on_off(1)
+
+        # Set the colour
+        self.set_colour(hue=120, value=100)
+
     def is_red(self):
         """ Check if the bulb is red and on
         """
@@ -374,15 +392,6 @@ class BulbObject(OnOffObject):
                 and state['state'] == 1):
             return True
         return False
-
-    def set_blue(self):
-        """ Turn bulb on and set it to blue at 100%
-        """
-        # Turn bulb on
-        self.set_on_off(1)
-
-        # Set the colour
-        self.set_colour(hue=240, value=100)
 
 
 class Group:
@@ -429,17 +438,20 @@ class SensorObject:
         We typically can't send message to these because they are
         usually asleep.  So we can only listen to attributes being reported.
     """
-    def __init__(self):
+    def __init__(self, indicator_bulb):
 
         # We use Blue colour on indicator bulb for a freezer over temp alert
-        # We have a freezer_alert_enabled parameter to allow us to turn the
-        # the freezer alarm on/off.
+        # alarm_enabled parameter is a temporary setting to allow us to turn
+        # the freezer alarm on/off when the temperature is too high.  Once the
+        # temperature is cold this setting is premenantly enabled (i.e. True)
         self.alarm_enabled = True
         self.temp_high = False
         self.temp = None
-        self.last_report = None
+        self.last_report = time.time()
+        self.indicator_bulb = indicator_bulb
+        self.last_indication = time.time()
 
-    def update_temperature(self, temperature):
+    def set_temperature(self, temperature):
         """ Update the object settings
             This is intended to be a provate class function
         """
@@ -450,6 +462,7 @@ class SensorObject:
             if self.temp > cfg.FREEZER_TEMP_THOLD:
                 self.temp_high = True
 
+            # 1'C Hysteresis on the reset of temp_high
             if self.temp_high and self.temp < (cfg.FREEZER_TEMP_THOLD - 1):
                 self.temp_high = False
 
@@ -457,6 +470,45 @@ class SensorObject:
         # we use None temp as a flag to show sensor_offline
         elif time.time() > self.last_report + (60 * 60):
             self.temp = None
+
+    def indicate(self):
+        """ Timer to decide if we should re-indicate
+        """
+        if time.time() > self.last_indication + (60 * 10):
+            return True
+        return False
+
+    def update(self):
+        """ Simple State Machine
+
+            We can be enabled or disabled, transition is on Long Press
+            of the ZigBee button.
+
+            if disabled and temp is low (+ hystereisis) then re-enable
+            (this stop us forgetting to reset the alarm)
+
+            If we are enabled and we have not recently set bulb colour:
+
+                if temp_high then show_blue
+                  or
+                if device_offline then show_green
+
+        """
+
+        # If we are not enabled and temperture is low then enable the alarm
+        if not self.alarm_enabled and not self.temp_high:
+            self.alarm_enabled = True
+
+        # If we are enabled and have not recently set the bulb
+        # and one of the alarm states is triggered then set the bulb
+        if self.indicate() and self.alarm_enabled:
+            if self.temp_high:
+                self.last_indication = time.time()
+                self.indicator_bulb.set_blue()
+
+            elif self.temp is None:
+                self.last_indication = time.time()
+                self.indicator_bulb.set_green()
 
 
 def main():

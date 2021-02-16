@@ -28,7 +28,6 @@ import threading
 import queue
 from textwrap import dedent
 import logging.config
-import random
 import yaml
 
 import udpcomms.hot_water_udp_client as udp_cli
@@ -316,7 +315,7 @@ def hive_bulb_checks(delays, colour_bulb):
             colour_bulb.set_white_off()
 
 
-def button_press(cmd, colour_bulb, sitt_group, hive_indication, voice_strings):
+def button_press(cmd, colour_bulb, sitt_group, freezer_sensor, voice_strings):
     """ Take actions based on the button press type:
 
         Short press:  Toggle lights on/off
@@ -338,20 +337,15 @@ def button_press(cmd, colour_bulb, sitt_group, hive_indication, voice_strings):
     # double press or long press
     elif cmd['msgCode'] in ["08", "10"]:
 
-        if hive_indication:
-            # Get the original bulb state
-            bulb_state = colour_bulb.get_state()
-
-            # Show alert state
-            colour_bulb.set_red()
-
-        # Play alert sound
+        # Play train notifications
         if cmd['msgCode'] == '08':
             LOGGER.debug("Button Double Press: Playing voice strings")
             voice_strings.play()
             # play_voice_strings([voice_strings])
 
+        # Play hot water level and toggle the freezer alarm setting
         elif cmd['msgCode'] == '10':
+            LOGGER.debug("Button Long Press: Playing msg")
 
             uwl = udp_cli.send_cmd(udp_cli.UWL_MESSAGE,
                                    udp_cli.UWL_RESP,
@@ -361,27 +355,20 @@ def button_press(cmd, colour_bulb, sitt_group, hive_indication, voice_strings):
                         "This is Robo Dad.  Go and have a shower!",
                         "Hot water is at {}.".format(uwl)]
 
-            colour_bulb.freezer_alarm_enabled = \
-                not colour_bulb.freezer_alarm_enabled
+            if colour_bulb.is_green() or colour_bulb.is_blue():
+                colour_bulb.set_white()
 
-            print(colour_bulb.freezer_alarm_enabled)
+                freezer_sensor.alarm_enabled = not freezer_sensor.alarm_enabled
+
             if colour_bulb.freezer_alarm_enabled:
                 fr_msg = "Freezer Alarm: Enabled."
             else:
                 fr_msg = 'Freezer Alarm: Off.'
 
+            LOGGER.debug(fr_msg)
             msg = [messages[2], fr_msg]
 
-            LOGGER.debug("Button Long Press: Playing msg")
             voice_strings.play(msg)
-            # play_voice_strings([msg])
-
-        # Get initial bulb state (if hive_indication and we can get a bulb
-        # state then allow bulb to be used)
-        if hive_indication:
-            time.sleep(3)
-            # Return bulb to original state
-            colour_bulb.set_state(bulb_state)
 
 
 def doorbell_press(colour_bulb):
@@ -416,7 +403,7 @@ def button_press_handler(button_press_queue, hive_indication, voice_strings):
     if hive_indication:
         colour_bulb = api.BulbObject(cfg.get_dev(cfg.INDICATOR_BULB))
         sitt_group = api.Group([cfg.get_dev(dev) for dev in cfg.SITT_GROUP])
-        freezer_sensor = api.SensorObject()
+        freezer_sensor = api.SensorObject(colour_bulb)
 
     # Main thread loop
     while True:
@@ -430,7 +417,7 @@ def button_press_handler(button_press_queue, hive_indication, voice_strings):
             # longPress   = play 'robodad' annoucement
             if cmd['nodeId'] == cfg.BUTTON_NODE_ID:
                 button_press(cmd, colour_bulb, sitt_group,
-                             hive_indication, voice_strings)
+                             freezer_sensor, voice_strings)
 
             # Handle doorbell button press
             if cmd["nodeId"] == cfg.BELL_BUTTON_ID:
@@ -441,25 +428,19 @@ def button_press_handler(button_press_queue, hive_indication, voice_strings):
             # Start a timer.  Reset the bulb if the timer expires
             if cmd["nodeId"] == cfg.FREEZER_TEMP_ID:
                 LOGGER.debug("TEMPERATURE REPORT %s", cmd['temperature'])
-                if (cmd['temperature'] > cfg.FREEZER_TEMP_THOLD and
-                        colour_bulb.freezer_alarm_enabled):
-                    colour_bulb.set_blue()
-                    freezer_alarm_set = time.time()
-
-            # If bulb is blue and the timer expires then make the bulb white
-            # Timer will expire if not being reset every 10mins by a high
-            # temperature report.
-            if (colour_bulb.is_blue() and
-                    time.time() > freezer_alarm_set + (12 * 60)):
-                colour_bulb.set_white(colour_temp=2700, value=100)
-
-            
+                freezer_sensor.set_temperature(cmd['temperature'])
 
             time.sleep(0.1)  # Delay to allow last command to take effect
 
             # Flush the queue here to avoid lots of bell ringing
             flush_queue(button_press_queue)
             print()
+
+        # Update the freezer_sensor object
+        # If disabled and temp has dropped to normal then re-enable the alarm
+        # If no reports for some time the show the offline warning.
+        # If freezer warm the show temp warning.s
+        freezer_sensor.update()
 
         # Sleep to avoid while loop spinning in this thread
         time.sleep(0.1)
