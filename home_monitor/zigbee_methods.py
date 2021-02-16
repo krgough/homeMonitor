@@ -393,6 +393,20 @@ class BulbObject(OnOffObject):
             return True
         return False
 
+    def is_green(self):
+        """ Check if the bulb is green and on
+        """
+        state = self.get_state()
+        if state is None:
+            LOGGER.error("Bulb state check failed in is_green()")
+            return False
+
+        if (state['c_mode'] == 'COLOUR'
+                and state['hue'] == 120
+                and state['state'] == 1):
+            return True
+        return False
+
 
 class Group:
     """ Class for managing a group of devices """
