@@ -482,7 +482,7 @@ class SensorObject:
 
         # If no report for more than 1hr then set temp to None
         # we use None temp as a flag to show sensor_offline
-        elif time.time() > self.last_report + (60 * 60):
+        elif time.time() > self.last_report + (60 * 1):
             self.temp = None
 
     def indicate(self):
@@ -523,6 +523,9 @@ class SensorObject:
             elif self.temp is None:
                 self.last_indication = time.time()
                 self.indicator_bulb.set_green()
+
+        msg = f"{self.temp},{self.temp_high},en={self.alarm_enabled}"
+        LOGGER.debug(msg)
 
 
 def main():
