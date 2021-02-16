@@ -500,11 +500,14 @@ class SensorObject:
         # If last_report is stale (older than 1hr) then set temperature to None
         # This is our flag that device is offline
         if time.time() > self.last_report + (60 * 60):
+            LOGGER.debug("No sensor report for 1hr.  Setting temp to None")
             self.temp = None
 
         # If we are not enabled and temperture is low then enable the alarm
         if not self.alarm_enabled and not self.temp_high:
             self.alarm_enabled = True
+            LOGGER.debug("Freezer alarm re-enabled.  Temp is low: %s",
+                         self.temp)
 
         # If we are enabled and have not recently set the bulb
         # and one of the alarm states is triggered then set the bulb
