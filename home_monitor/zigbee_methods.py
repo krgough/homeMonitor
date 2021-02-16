@@ -469,6 +469,7 @@ class SensorObject:
         """ Update the object settings
             This is intended to be a provate class function
         """
+        LOGGER.debug(temperature)
         if self.temp:
             self.temp = temperature
             self.last_report = time.time()
@@ -484,6 +485,8 @@ class SensorObject:
         # we use None temp as a flag to show sensor_offline
         elif time.time() > self.last_report + (60 * 1):
             self.temp = None
+
+        LOGGER.debug(self.temp)
 
     def indicate(self):
         """ Timer to decide if we should re-indicate
