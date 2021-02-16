@@ -488,7 +488,7 @@ class SensorObject:
     def indicate(self):
         """ Timer to decide if we should re-indicate
         """
-        if time.time() > self.last_indication + (1):
+        if time.time() > self.last_indication + (60):
             return True
         return False
 
