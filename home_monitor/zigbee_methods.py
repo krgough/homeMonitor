@@ -401,6 +401,9 @@ class BulbObject(OnOffObject):
             LOGGER.error("Bulb state check failed in is_green()")
             return False
 
+        LOGGER.debug("REMOVE ME: {},{},{}".format(state['c_mode'],
+                                                  state['hue'],
+                                                  state['state']))
         if (state['c_mode'] == 'COLOUR'
                 and state['hue'] == 120
                 and state['state'] == 1):
