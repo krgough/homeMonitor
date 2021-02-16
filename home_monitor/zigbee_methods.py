@@ -524,7 +524,7 @@ class SensorObject:
                 self.last_indication = time.time()
                 self.indicator_bulb.set_green()
 
-        msg = f"{self.temp},{self.temp_high},en={self.alarm_enabled}"
+        msg = f"{self.temp},{self.temp_high},en:{str(self.alarm_enabled)}"
         LOGGER.debug(msg)
 
 
