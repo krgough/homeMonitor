@@ -353,7 +353,7 @@ def button_press(cmd, colour_bulb, sitt_group, freezer_sensor, voice_strings):
 
             messages = ["KG traindicator 9000.",
                         "This is Robo Dad.  Go and have a shower!",
-                        "Hot water is at {}.".format(uwl)]
+                        "Hot water is at {}".format(uwl)]
 
             if colour_bulb.is_green() or colour_bulb.is_blue():
                 LOGGER.debug("Disabling freezer alarm")
@@ -505,7 +505,7 @@ class Voice():
         """
 
         voice_strings = msg if msg else self.strings
-        voice_string = '. '.join(voice_strings)
+        voice_string = '. '.join(voice_strings) + '.'
 
         LOGGER.debug(voice_string)
         # Form the complete command
