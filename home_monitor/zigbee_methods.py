@@ -488,7 +488,7 @@ class SensorObject:
     def indicate(self):
         """ Timer to decide if we should re-indicate
         """
-        if time.time() > self.last_indication + (60 * 10):
+        if time.time() > self.last_indication + (1):
             return True
         return False
 
@@ -517,15 +517,14 @@ class SensorObject:
         # and one of the alarm states is triggered then set the bulb
         if self.indicate() and self.alarm_enabled:
             if self.temp_high:
+                LOGGER.debug("OVER TEMP ALARM - Setting bulb blue")
                 self.last_indication = time.time()
                 self.indicator_bulb.set_blue()
 
             elif self.temp is None:
+                LOGGER.debug("FREEZER SENSOR OFFLINE - Setting bulb green")
                 self.last_indication = time.time()
                 self.indicator_bulb.set_green()
-
-        msg = "{},{},en:{}".format(self.temp, self.temp_high, self.alarm_enabled)
-        LOGGER.debug(msg)
 
 
 def main():

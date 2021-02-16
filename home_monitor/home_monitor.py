@@ -431,6 +431,10 @@ def button_press_handler(button_press_queue, hive_indication, voice_strings):
             if cmd["nodeId"] == cfg.FREEZER_TEMP_ID:
                 LOGGER.debug("TEMPERATURE REPORT %s", cmd['temperature'])
                 freezer_sensor.set_temperature(cmd['temperature'])
+                msg = "{},{},en:{}".format(freezer_sensor.temp,
+                                           freezer_sensor.temp_high,
+                                           freezer_sensor.alarm_enabled)
+                LOGGER.debug(msg)
 
             time.sleep(0.1)  # Delay to allow last command to take effect
 
