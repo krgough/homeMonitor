@@ -355,12 +355,12 @@ def button_press(cmd, colour_bulb, sitt_group, freezer_sensor, voice_strings):
                         "This is Robo Dad.  Go and have a shower!",
                         "Hot water is at {}.".format(uwl)]
 
-            LOGGER.debug("BLUE = %s", colour_bulb.is_blue())
-            LOGGER.debug("GREEN = %s", colour_bulb.is_green())
             if colour_bulb.is_green() or colour_bulb.is_blue():
+                LOGGER.debug("Disabling freezer alarm")
                 colour_bulb.set_white(colour_temp=2700, value=100)
-
                 freezer_sensor.alarm_enabled = not freezer_sensor.alarm_enabled
+                LOGGER.debug("Freezer Alarm Enabled = %s",
+                             freezer_sensor.alarm_enabled)
 
             if colour_bulb.freezer_alarm_enabled:
                 fr_msg = "Freezer Alarm: Enabled."
@@ -431,10 +431,6 @@ def button_press_handler(button_press_queue, hive_indication, voice_strings):
             if cmd["nodeId"] == cfg.FREEZER_TEMP_ID:
                 LOGGER.debug("TEMPERATURE REPORT %s", cmd['temperature'])
                 freezer_sensor.set_temperature(cmd['temperature'])
-                msg = "{},{},en:{}".format(freezer_sensor.temp,
-                                           freezer_sensor.temp_high,
-                                           freezer_sensor.alarm_enabled)
-                LOGGER.debug(msg)
 
             time.sleep(0.1)  # Delay to allow last command to take effect
 
