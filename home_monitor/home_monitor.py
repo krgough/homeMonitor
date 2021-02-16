@@ -355,6 +355,8 @@ def button_press(cmd, colour_bulb, sitt_group, freezer_sensor, voice_strings):
                         "This is Robo Dad.  Go and have a shower!",
                         "Hot water is at {}.".format(uwl)]
 
+            LOGGER.debug("BLUE = %s", colour_bulb.is_blue())
+            LOGGER.debug("BLUE = %s", colour_bulb.is_green())
             if colour_bulb.is_green() or colour_bulb.is_blue():
                 colour_bulb.set_white(colour_temp=2700, value=100)
 
