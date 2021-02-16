@@ -424,6 +424,41 @@ class Group:
             node.set_on_off(0)
 
 
+class SensorObject:
+    """ Class for handling a sensor object
+        We typically can't send message to these because they are
+        usually asleep.  So we can only listen to attributes being reported.
+    """
+    def __init__(self):
+
+        # We use Blue colour on indicator bulb for a freezer over temp alert
+        # We have a freezer_alert_enabled parameter to allow us to turn the
+        # the freezer alarm on/off.
+        self.alarm_enabled = True
+        self.temp_high = False
+        self.temp = None
+        self.last_report = None
+
+    def update_temperature(self, temperature):
+        """ Update the object settings
+            This is intended to be a provate class function
+        """
+        if self.temp:
+            self.temp = temperature
+            self.last_report = time.time()
+
+            if self.temp > cfg.FREEZER_TEMP_THOLD:
+                self.temp_high = True
+
+            if self.temp_high and self.temp < (cfg.FREEZER_TEMP_THOLD - 1):
+                self.temp_high = False
+
+        # If no report for more than 1hr then set temp to None
+        # we use None temp as a flag to show sensor_offline
+        elif time.time() > self.last_report + (60 * 60):
+            self.temp = None
+
+
 def main():
     """ Main Program - runs tests on a colour bulb and a group of devices
     """

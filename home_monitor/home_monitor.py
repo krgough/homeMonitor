@@ -47,28 +47,6 @@ CHECK_THREAD_STOP = threading.Event()
 THREAD_POOL = []
 DELAY_CHECK_SLEEP_TIME = 5 * 60
 
-# TEST_DELAYS = [{'to': 'lei',
-#                 'from': 'stp',
-#                 'eta': None,
-#                 'sta': None,
-#                 'etd': '15:36',
-#                 'std': '15:31',
-#                 'isCancelled': False,
-#                 'cancelReason': None,
-#                 'delayReason': None,
-#                 'platform': '4A'},
-#                {'to': 'lei',
-#                 'from': 'stp',
-#                 'eta': None,
-#                 'sta': None,
-#                 'etd': '15:39',
-#                 'std': '15:34',
-#                 'isCancelled': False,
-#                 'cancelReason': None,
-#                 'delayReason': "Delayed by ferrets on the lines",
-#                 'platform': '2'},
-#                ]
-
 
 def get_args():
     """ Read command line parameters
@@ -319,18 +297,16 @@ def hive_bulb_checks(delays, colour_bulb):
         colour_bulb.set_red()
         colour_bulb.alert_active = True
 
-    # Turn off the Hive bulb if no delays and we think we are still showing
-    # an alert and bulb is currently still showing a delay. Extra logic here
-    # helps to limit number of API calls
+    # Turn off the Hive bulb if no delays and we think we are
+    # still showing an alert
     if (not delays) and colour_bulb.alert_active:
         colour_bulb.alert_active = False
         if colour_bulb.is_red():
             LOGGER.debug("Turn indicator bulb off.  No more delays")
             colour_bulb.set_white_off()
 
-    # Turn off hive bulb if schedule is off and we think we are still showing
-    # an alert and bulb is still showing a delay.  Extra logic here helps to
-    # limit the number of API calls.
+    # Turn off hive bulb if schedule is off and we think we are
+    # still showing an alert
     if not schedule_check() and colour_bulb.alert_active:
         colour_bulb.alert_active = False
         if colour_bulb.is_red():
@@ -343,19 +319,15 @@ def hive_bulb_checks(delays, colour_bulb):
 def button_press(cmd, colour_bulb, sitt_group, hive_indication, voice_strings):
     """ Take actions based on the button press type:
 
-        Short press:  Play the delay annoucements.
+        Short press:  Toggle lights on/off
 
-        Long press:   Set bulb red, play "Traindicator....",
+        Double press: Bulb=red, play delay announcements,
                       return bulb to original state
 
-        Double press: Bulb=red, play "This is robo dad...",
-                      return bulb to original state
-
-        Short press:  Toggle light group on/off
-        Long press:   Play the delay announcements
-        Double press: Bulb=red, play 'This is robo dad...' or
-                                     'Train-d-cator"
-                      return bulb to original state
+        Long press:   Play water level annoucement,
+                      If bulb_green or bulb_blue then Bulb=white,
+                      toggle freezer alarm enable/disable
+                      Leave bulb white - part of disable
 
     """
     # short press: Toggle the sitting room group all on or all off
@@ -438,10 +410,15 @@ def button_press_handler(button_press_queue, hive_indication, voice_strings):
     # If we are using a hive bulb as an indicator then create a data object
     # for the bulb.
     colour_bulb = None
+    sitt_group = None
+    freezer_sensor = None
+
     if hive_indication:
         colour_bulb = api.BulbObject(cfg.get_dev(cfg.INDICATOR_BULB))
         sitt_group = api.Group([cfg.get_dev(dev) for dev in cfg.SITT_GROUP])
+        freezer_sensor = api.SensorObject()
 
+    # Main thread loop
     while True:
         if not button_press_queue.empty():
             cmd = button_press_queue.get()
@@ -476,6 +453,8 @@ def button_press_handler(button_press_queue, hive_indication, voice_strings):
                     time.time() > freezer_alarm_set + (12 * 60)):
                 colour_bulb.set_white(colour_temp=2700, value=100)
 
+            
+
             time.sleep(0.1)  # Delay to allow last command to take effect
 
             # Flush the queue here to avoid lots of bell ringing
@@ -484,6 +463,7 @@ def button_press_handler(button_press_queue, hive_indication, voice_strings):
 
         # Sleep to avoid while loop spinning in this thread
         time.sleep(0.1)
+        print('Here')
 
 
 class Voice():
