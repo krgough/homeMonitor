@@ -499,7 +499,7 @@ class SensorObject:
         """
         # If last_report is stale (older than 1hr) then set temperature to None
         # This is our flag that device is offline
-        if time.time() > self.last_report + (60 * 1):
+        if time.time() > self.last_report + (60 * 60):
             self.temp = None
 
         # If we are not enabled and temperture is low then enable the alarm
