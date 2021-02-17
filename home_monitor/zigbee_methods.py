@@ -503,7 +503,8 @@ class SensorObject:
             LOGGER.debug("No sensor report for 1hr.  Setting temp to None")
             self.temp = None
 
-        # If we are not enabled and temperture is low then enable the alarm
+        # If we are not enabled and we have a temperature value
+        # and the temperture is low then enable the alarm
         if not self.alarm_enabled and self.temp and not self.temp_high:
             self.alarm_enabled = True
             LOGGER.debug("Freezer alarm re-enabled.  Temp is low: %s",

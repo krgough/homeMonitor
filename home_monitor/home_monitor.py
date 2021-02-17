@@ -358,7 +358,7 @@ def button_press(cmd, colour_bulb, sitt_group, freezer_sensor, voice_strings):
             if colour_bulb.is_green() or colour_bulb.is_blue():
                 LOGGER.debug("Disabling freezer alarm")
                 colour_bulb.set_white(colour_temp=2700, value=100)
-                freezer_sensor.alarm_enabled = not freezer_sensor.alarm_enabled
+                freezer_sensor.alarm_enabled = False
                 LOGGER.debug("Freezer Alarm Enabled = %s",
                              freezer_sensor.alarm_enabled)
 
