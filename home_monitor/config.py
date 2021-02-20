@@ -47,8 +47,11 @@ DEVS = {
     'Sitt Rear': {'eui': '001E5E09021AEBD6', 'ep': '09'},
     'Stair Plug': {'eui': '001E5E09020F2F53', 'ep': '09'},
     'Bed LEDs': {'eui': '001E5E0902171636', 'ep': '09'},
-    'Garage Plug': {'eui': '001E5E09020DA01E', 'ep': '09'},
+    'Garage Plug': {'eui': '001E5E090215F91D', 'ep': '09'},
 }
+
+# old plug: 'Garage Plug': {'eui': '001E5E09020DA01E', 'ep': '09'}
+# new plug: FFD:001E5E090215F91D,97C3
 
 
 def get_dev(dev_name):

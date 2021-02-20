@@ -516,12 +516,12 @@ class SensorObject:
             if self.temp_high:
                 LOGGER.debug("OVER TEMP ALARM - Setting bulb blue")
                 self.last_indication = time.time()
-                self.indicator_bulb.set_blue()
+                # self.indicator_bulb.set_blue()
 
             elif self.temp is None:
                 LOGGER.debug("FREEZER SENSOR OFFLINE - Setting bulb green")
                 self.last_indication = time.time()
-                self.indicator_bulb.set_green()
+                # self.indicator_bulb.set_green()
 
 
 def main():
