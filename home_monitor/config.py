@@ -33,6 +33,7 @@ GPIO_CHANNEL = 4
 # SUBSYSTEM=="tty", ATTRS{serial}=="04000A0B", SYMLINK+="HIVE_DONGLE"
 ZB_PORT = "/dev/BUTTON_DONGLE"
 HIVE_ZB_PORT = "/dev/HIVE_DONGLE"
+HIVE_EUI = "000D6F000C44F290"
 ZB_BAUD = 115200
 
 BUTTON_NODE_ID = "7967"   # Black Button
@@ -48,6 +49,7 @@ DEVS = {
     'Stair Plug': {'eui': '001E5E09020F2F53', 'ep': '09'},
     'Bed LEDs': {'eui': '001E5E0902171636', 'ep': '09'},
     'Garage Plug': {'eui': '001E5E09020DA01E', 'ep': '09'},
+    'Temperature Sensor': {'eui': '', 'ep': '06'}
 }
 
 
