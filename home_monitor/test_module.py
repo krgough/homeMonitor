@@ -32,10 +32,11 @@ def main():
                 report_interval = "{:04x}".format(60 * 10)
                 bind_msg = "at+bind:{node_id},3,{sensor_eui},06,0402,{dongle_eui},01"
                 set_report = "at+cfgrpt:{node_id},06,0,0402,0,0000,29,0001,{report_interval},0001"
+
                 at.TX_QUEUE.put(bind_msg.format(node_id=node_id,
                                                 sensor_eui=sensor_eui,
                                                 dongle_eui=dongle_eui))
-                
+
                 at.TX_QUEUE.put(set_report.format(node_id=node_id,
                                                   report_interval=report_interval))
 
