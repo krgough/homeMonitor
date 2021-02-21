@@ -52,6 +52,7 @@ DEVS = {
 
 # old plug: 'Garage Plug': {'eui': '001E5E09020DA01E', 'ep': '09'}
 # new plug: FFD:001E5E090215F91D,97C3
+# Booster: FFD:001E5E0902089B07,0EE8
 
 
 def get_dev(dev_name):
