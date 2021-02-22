@@ -326,9 +326,6 @@ class BulbObject(OnOffObject):
             LOGGER.error("Error setting bulb to white.")
             return
 
-        if resp_value is None:
-            LOGGER.error("Error setting bulb level")
-
         return
 
     def set_red(self):
@@ -451,7 +448,7 @@ class SensorObject:
 
         # We monitor teperature reports from the freezer and set temp_high
         # if freezer warms about the threshold.  We reset temp_high when
-        # temperature falls below the threshold plus some hysteresis
+        # temperature falls below the threshold plus some hysteresis
         self.temp_high = False
         self.temp = None
         self.last_report = time.time()
@@ -470,78 +467,48 @@ class SensorObject:
         if self.temp_high and self.temp < (cfg.FREEZER_TEMP_THOLD - 1):
             self.temp_high = False
 
+    def set_temp_rpt_cfg(self, checkin_msg):
+        """ If we have not received a temperature report for seom time
+            and we recieve a checkin then reset the attribure report config
 
-def set_temp_report(checkin_msg):
-    """ Set a binding on the temperature cluster and
-        the attribute report configuration
+            We expect a temp report every 5mins so we allow just over 10mins
+            for 2 missing readings before attempting the reset.
 
-        We extract the node id from the checkin message
-        (just in case the node ID changes on us)
-    """
-    node_id = checkin_msg.split(',')[0].split(":")[1]
+            We need to set a binding on the temperature cluster and
+            the attribute report configuration
 
-    dongle_eui = cfg.HIVE_EUI
-    sensor_eui = cfg.DEVS['Temperature Sensor']['eui']
-    report_interval = "{:04x}".format(60 * 10)  # 10 mins
+            We extract the node id from the checkin message
+            (just in case the node ID changes on us)
 
-    bind_msg = "at+bind:{node_id},3,{sensor_eui},06,0402,{dongle_eui},01"
-    set_report = "at+cfgrpt:{node_id},06,0,0402,0,0000,29,0001,{report_interval},0001"
+            These msgs are sent fire and forget.  There is little
+            point in waiting for the reply - they either work or
+            we try again next checkin
 
-    at.TX_QUEUE.put(bind_msg.format(node_id=node_id,
-                                    sensor_eui=sensor_eui,
-                                    dongle_eui=dongle_eui))
+        """
+        if time.time() - self.last_report > (60 * 12):
+            node_id = checkin_msg.split(',')[0].split(":")[1]
 
-    at.TX_QUEUE.put(set_report.format(node_id=node_id,
-                                      report_interval=report_interval))
+            report_interval = "{:04x}".format(60 * 10)  # 10 mins
 
+            bind_msg = ("at+bind:{node_id},3,{sensor_eui},"
+                        "06,0402,{dongle_eui},01")
 
-#     def indicate(self):
-#         """ Timer to decide if we should re-indicate
-#         """
-#         if time.time() > self.last_indication + (60 * 10):
-#             return True
-#         return False
+            cfg_rep = ("at+cfgrpt:{node_id},06,0,0402,0,0000,29,"
+                       "0001,{report_interval},0001")
 
-#     def update(self):
-#         """ Simple State Machine
-# 
-#             We can be enabled or disabled, transition is on Long Press
-#             of the ZigBee button.
-# 
-#             if disabled and temp is low (+ hystereisis) then re-enable
-#             (this stop us forgetting to reset the alarm)
-# 
-#             If we are enabled and we have not recently set bulb colour:
-# 
-#                 if temp_high then show_blue
-#                   or
-#                 if device_offline then show_green
-# 
-#         """
-#         # If last_report is stale (older than 1hr) then set temperature to None
-#         # This is our flag that device is offline
-#         if self.temp and time.time() > self.last_report + (60 * 60):
-#             LOGGER.debug("No sensor report for 1hr.  Setting temp to None")
-#             self.temp = None
-# 
-#         # If we are not enabled and temperture is low then enable the alarm
-#         if not self.alarm_enabled and self.temp and not self.temp_high:
-#             self.alarm_enabled = True
-#             LOGGER.debug("Freezer alarm re-enabled.  Temp is low: %s",
-#                          self.temp)
-# 
-#         # If we are enabled and have not recently set the bulb
-#         # and one of the alarm states is triggered then set the bulb
-#         if self.indicate() and self.alarm_enabled:
-#             if self.temp_high:
-#                 LOGGER.debug("OVER TEMP ALARM - Setting bulb blue")
-#                 self.last_indication = time.time()
-#                 self.indicator_bulb.set_blue()
-# 
-#             elif self.temp is None:
-#                 LOGGER.debug("FREEZER SENSOR OFFLINE - Setting bulb green")
-#                 self.last_indication = time.time()
-#                 self.indicator_bulb.set_green()
+            LOGGER.debug("Resetting temperature attribute report config")
+            at.TX_QUEUE.put(
+                bind_msg.format(
+                    node_id=node_id,
+                    sensor_eui=cfg.DEVS['Temperature Sensor']['eui'],
+                    dongle_eui=cfg.HIVE_EUI)
+                )
+
+            at.TX_QUEUE.put(
+                cfg_rep.format(
+                    node_id=node_id,
+                    report_interval=report_interval)
+                )
 
 
 def main():

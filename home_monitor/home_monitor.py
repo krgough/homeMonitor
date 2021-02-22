@@ -26,10 +26,12 @@ import time
 import datetime
 import threading
 import queue
+import re
 from textwrap import dedent
 import logging.config
 import yaml
 
+from udpcomms import hex_temp
 import udpcomms.hot_water_udp_client as udp_cli
 import zigbeetools.threaded_serial as at
 
@@ -40,7 +42,7 @@ import config as cfg
 # import api_methods as api  # old hive API's (now closed down)
 import zigbee_methods as api  # Control using Zigbee AT commands
 import gpio_monitor as gm
-
+import freezer_alarm_fsm as fsm
 
 CHECK_THREAD_STOP = threading.Event()
 THREAD_POOL = []
@@ -268,7 +270,7 @@ def check_for_delays(to_station, from_station, use_leds,
             led.show_pattern("NO_DELAYS", led.Colours.GREEN_DIM)
 
         # Hive Indication using an RGB bulb
-        # Turn on alert if we ahve a delay
+        # Turn on alert if we have a delay
         # Calncel old alerts if no delays or if we exit schedule period
         if hive_indication:
             hive_bulb_checks(delays, colour_bulb)
@@ -315,7 +317,7 @@ def hive_bulb_checks(delays, colour_bulb):
             colour_bulb.set_white_off()
 
 
-def button_press(cmd, colour_bulb, sitt_group, freezer_sensor, voice_strings):
+def button_press(cmd, sitt_group, freezer_sensor, voice_strings):
     """ Take actions based on the button press type:
 
         Short press:  Toggle lights on/off
@@ -351,26 +353,12 @@ def button_press(cmd, colour_bulb, sitt_group, freezer_sensor, voice_strings):
                                    udp_cli.UWL_RESP,
                                    udp_cli.ADDRESS)
 
-            messages = ["KG traindicator 9000.",
-                        "This is Robo Dad.  Go and have a shower!",
-                        "Hot water is at {}".format(uwl)]
+            hw_msg = "Hot water is at {}".format(uwl)
 
-            if colour_bulb.is_green() or colour_bulb.is_blue():
-                LOGGER.debug("Disabling freezer alarm")
-                colour_bulb.set_white(colour_temp=2700, value=100)
-                freezer_sensor.alarm_enabled = not freezer_sensor.alarm_enabled
-                LOGGER.debug("Freezer Alarm Enabled = %s",
-                             freezer_sensor.alarm_enabled)
-
-            if freezer_sensor.alarm_enabled:
-                fr_msg = "Freezer Alarm: Enabled."
-            else:
-                fr_msg = 'Freezer Alarm: Off.'
-
-            fr_msg += " Freezer Temperature is {}".format(freezer_sensor.temp)
-
-            LOGGER.debug(fr_msg)
-            msg = [messages[2], fr_msg]
+            freezer_sensor.long_press_received = True
+            fr_msg = " Freezer Temperature is {}".format(freezer_sensor.temp)
+            msg = [hw_msg, fr_msg]
+            LOGGER.debug(str(msg))
 
             voice_strings.play(msg)
 
@@ -403,11 +391,12 @@ def button_press_handler(button_press_queue, hive_indication, voice_strings):
     colour_bulb = None
     sitt_group = None
     freezer_sensor = None
+    freezer_alarm = fsm.SensorStateMachine(colour_bulb, freezer_sensor)
 
     if hive_indication:
         colour_bulb = api.BulbObject(cfg.get_dev(cfg.INDICATOR_BULB))
         sitt_group = api.Group([cfg.get_dev(dev) for dev in cfg.SITT_GROUP])
-        freezer_sensor = api.SensorObject(colour_bulb)
+        freezer_sensor = api.SensorObject()
 
     # Main thread loop
     while True:
@@ -420,19 +409,18 @@ def button_press_handler(button_press_queue, hive_indication, voice_strings):
             # doublePress = play annoucement and briefly change bulb colour
             # longPress   = play 'robodad' annoucement
             if cmd['nodeId'] == cfg.BUTTON_NODE_ID:
-                button_press(cmd, colour_bulb, sitt_group,
-                             freezer_sensor, voice_strings)
+                button_press(cmd, sitt_group, freezer_sensor, voice_strings)
 
             # Handle doorbell button press
             if cmd["nodeId"] == cfg.BELL_BUTTON_ID:
                 LOGGER.debug("Doorbell button press.  Playing doorbell sound.")
                 doorbell_press(colour_bulb)
 
-            # Set the bulb blue if temp threshold is crossed.
-            # Start a timer.  Reset the bulb if the timer expires
+            # Save the temperature and update the state_machine
             if cmd["nodeId"] == cfg.FREEZER_TEMP_ID:
                 LOGGER.debug("TEMPERATURE REPORT %s", cmd['temperature'])
-                freezer_sensor.set_temperature(cmd['temperature'])
+                freezer_sensor.temp = cmd['temperature']
+                freezer_alarm.on_event()
 
             time.sleep(0.1)  # Delay to allow last command to take effect
 
@@ -440,11 +428,33 @@ def button_press_handler(button_press_queue, hive_indication, voice_strings):
             flush_queue(button_press_queue)
             print()
 
+        # If we have a temperature report then update the object
+        # If we have a check-in from the sensor and we have not had a recent
+        # temperature report then attempt to reset the report config
+        if not at.LISTNER_QUEUE.empty():
+            msg = at.LISTNER_QUEUE.get()
+
+            # Temperaure report
+            # REPORTATTR:2F28,06,0402,0000,29,08E3
+            regex = "REPORTATTR:[0-9a-fA-F]{4},06,0402,0000,29"
+            if re.match(regex, msg):
+                node_id = msg.split(':')[1][:4]
+                temperature = msg.split(",")[-1]
+                freezer_sensor.temp = hex_temp.convert_s16(temperature) / 100
+
+                LOGGER.debug("TEMPERATURE, %s, %s",
+                             node_id, freezer_sensor.temp)
+
+            # CHECKIN:2F28,06,00
+            regex = "CHECKIN:[0-9a-fA-F]{4},06"
+            if re.match(regex, msg):
+                freezer_sensor.set_temp_rpt_cfg(msg)
+
         # Update the freezer_sensor object
         # If disabled and temp has dropped to normal then re-enable the alarm
         # If no reports for some time the show the offline warning.
-        # If freezer warm the show temp warning.s
-        freezer_sensor.update()
+        # If freezer warm the show temperature warning.
+        freezer_alarm.on_event()
 
         # Sleep to avoid while loop spinning in this thread
         time.sleep(0.1)
@@ -565,7 +575,8 @@ def main():
         at_threads = at.start_serial_threads(port=cfg.HIVE_ZB_PORT,
                                              baud=cfg.ZB_BAUD,
                                              print_status=False,
-                                             rx_q=True)
+                                             rx_q=True,
+                                             listener_q=True)
 
         at_threads[0].name = 'Hive Zigbee - read thread'
         at_threads[1].name = 'Hive Zigbee - write thread'
