@@ -15,20 +15,6 @@ import config as cfg
 LOGGER = logging.getLogger(__name__)
 
 
-def is_time_between(begin_time, end_time, check_time=None):
-    """ Check time is between begin and end
-        If check_time is not given then use current UTC time
-
-    """
-    # If check time is not given, default to current UTC time
-    check_time = check_time or datetime.datetime.utcnow().time()
-    if begin_time < end_time:
-        return begin_time <= check_time <= end_time
-
-    # Else checktime is crossing midnight
-    return check_time >= begin_time or check_time <= end_time
-
-
 # pylint: disable=too-few-public-methods
 class Sensor:
     """ Test Sensor """
@@ -157,9 +143,8 @@ class SensorOffline(State):
         super().__init__(bulb, sensor)
 
         # If bulb is not green and schedule allows then show_green
-        if (is_time_between(datetime.time(7, 0),
-                            datetime.time(23, 0))
-                and not self.bulb.set_green()):
+        schedule = cfg.FREEZER_SENSOR_OFFLINE_SCHEDULE
+        if cfg.schedule_check(schedule) and not self.bulb.is_green():
             LOGGER.debug("Sensor Offline - setting bulb green")
             self.bulb.set_green()
 
@@ -194,9 +179,8 @@ class SensorOffline(State):
         # If we are staying here then we may need to turn the bulb
         # green (we may have moved from out of hours to inside
         # hours.
-        if (is_time_between(datetime.time(7, 0),
-                            datetime.time(23, 0))
-                and not self.bulb.set_green()):
+        schedule = cfg.FREEZER_SENSOR_OFFLINE_SCHEDULE
+        if cfg.schedule_check(schedule) and not self.bulb.is_green():
             LOGGER.debug("Sensor Offline - setting bulb green")
             self.bulb.set_green()
 
