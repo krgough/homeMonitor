@@ -274,7 +274,7 @@ class BulbObject(OnOffObject):
         if resp_value is None:
             LOGGER.error("Error setting bulb color/level")
 
-    def set_white(self, colour_temp, value):
+    def set_white(self, colour_temp=2700, value=100):
         """ colour_temp: 2700 = warm white, 4000 = cool white
             value (brightness): 0-100
         """
