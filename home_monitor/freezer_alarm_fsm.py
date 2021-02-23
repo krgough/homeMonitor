@@ -73,6 +73,8 @@ class State:
         self.sensor = sensor
         self.bulb = bulb
         LOGGER.debug('Entering state: %s', str(self))
+        LOGGER.debug(self.sensor.online())
+        LOGGER.debug(self.sensor.last_report)
 
     def on_event(self):
         """ Handle events that are delegated to this State. """
@@ -92,13 +94,12 @@ class TempNormal(State):
         """ Handle the events """
         # We should recieve temperature reports every 5mins
 
-        # If too hot the transition to state=TempHigh
-        if self.sensor.temp_high:
-            return TempHigh
-
-        # If not recent reports then transition to state=SensorOffline
+        # If no recent reports then transition to state=SensorOffline
         if not self.sensor.online():
             return SensorOffline
+        # If online and too hot then transition to state=TempHigh
+        elif self.sensor.temp_high:
+            return TempHigh
 
         return self
 
