@@ -372,12 +372,12 @@ def button_press_handler(button_press_queue, hive_indication, voice_strings):
     colour_bulb = None
     sitt_group = None
     freezer_sensor = None
-    freezer_alarm = fsm.SensorStateMachine(colour_bulb, freezer_sensor)
 
     if hive_indication:
         colour_bulb = api.BulbObject(cfg.get_dev(cfg.INDICATOR_BULB))
         sitt_group = api.Group([cfg.get_dev(dev) for dev in cfg.SITT_GROUP])
         freezer_sensor = api.SensorObject()
+        freezer_alarm = fsm.SensorStateMachine(colour_bulb, freezer_sensor)
 
     # Main thread loop
     while True:
