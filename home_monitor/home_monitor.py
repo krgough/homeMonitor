@@ -339,8 +339,6 @@ def button_press(cmd, sitt_group, freezer_sensor, voice_strings):
             freezer_sensor.long_press_received = True
             fr_msg = " Freezer Temperature is {}".format(freezer_sensor.temp)
             msg = [hw_msg, fr_msg]
-            LOGGER.debug(str(msg))
-
             voice_strings.play(msg)
 
 
@@ -397,11 +395,11 @@ def button_press_handler(button_press_queue, hive_indication, voice_strings):
                 LOGGER.debug("Doorbell button press.  Playing doorbell sound.")
                 doorbell_press(colour_bulb)
 
-            # Save the temperature and update the state_machine
-            if cmd["nodeId"] == cfg.FREEZER_TEMP_ID:
-                LOGGER.debug("TEMPERATURE REPORT %s", cmd['temperature'])
-                freezer_sensor.temp = cmd['temperature']
-                freezer_alarm.on_event()
+            # # Save the temperature and update the state_machine
+            # if cmd["nodeId"] == cfg.FREEZER_TEMP_ID:
+            #     LOGGER.debug("TEMPERATURE REPORT %s", cmd['temperature'])
+            #     freezer_sensor.temp = cmd['temperature']
+            #     freezer_alarm.on_event()
 
             time.sleep(0.1)  # Delay to allow last command to take effect
 
@@ -421,7 +419,8 @@ def button_press_handler(button_press_queue, hive_indication, voice_strings):
             if re.match(regex, msg):
                 node_id = msg.split(':')[1][:4]
                 temperature = msg.split(",")[-1]
-                freezer_sensor.temp = hex_temp.convert_s16(temperature) / 100
+                temperature = hex_temp.convert_s16(temperature) / 100
+                freezer_sensor.update_temperature(temperature)
 
                 LOGGER.debug("TEMPERATURE, %s, %s",
                              node_id, freezer_sensor.temp)
