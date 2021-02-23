@@ -38,7 +38,7 @@ ZB_BAUD = 115200
 
 BUTTON_NODE_ID = "7967"   # Black Button
 FREEZER_TEMP_ID = "C23A"  # Freezer temperature sensor
-FREEZER_TEMP_THOLD = -10  # Freezer temperature alert threshold
+FREEZER_TEMP_THOLD = 30   # Freezer temperature alert threshold
 
 SITT_GROUP = ['Sitt Front', 'Sitt Rear', 'Sitt Colour']
 
