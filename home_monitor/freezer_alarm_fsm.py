@@ -7,7 +7,6 @@ TODO: Deal with red light conflict - No conf
 TODO: Move out of hours times to cfg
 
 '''
-import datetime
 import time
 import logging
 import config as cfg
@@ -94,7 +93,7 @@ class TempNormal(State):
             return TempHigh
 
         # If not recent reports then transition to state=SensorOffline
-        if time.time() - self.sensor.last_report > (60 * 60):
+        if time.time() - self.sensor.last_report > cfg.SENSOR_OFFLINE_TIME:
             return SensorOffline
 
         return self

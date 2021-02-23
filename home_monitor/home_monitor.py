@@ -410,7 +410,7 @@ def button_press_handler(button_press_queue, hive_indication, voice_strings):
         # If we have a temperature report then update the object
         # If we have a check-in from the sensor and we have not had a recent
         # temperature report then attempt to reset the report config
-        if not at.LISTNER_QUEUE.empty():
+        while not at.LISTNER_QUEUE.empty():
             msg = at.LISTNER_QUEUE.get()
 
             # Temperaure report

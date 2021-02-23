@@ -12,6 +12,9 @@ INDICATOR_BULB = "Sitt Colour"
 TRAIN_DELAY_INDICATION_SCHEDULE = [("06:00", "08:00")]
 FREEZER_SENSOR_OFFLINE_SCHEDULE = [("07:00", "22:00")]
 
+FREEZER_TEMP_THOLD = 30       # Freezer temperature alert threshold
+SENSOR_OFFLINE_TIME = 60 * 1  # Time in seconds before we declare offline
+
 LOGFILE = "/tmp/home_monitor.log"
 
 LED_PORT = "/dev/ttyS0"
@@ -36,9 +39,7 @@ HIVE_ZB_PORT = "/dev/HIVE_DONGLE"
 HIVE_EUI = "000D6F000C44F290"
 ZB_BAUD = 115200
 
-BUTTON_NODE_ID = "7967"   # Black Button
-FREEZER_TEMP_ID = "C23A"  # Freezer temperature sensor
-FREEZER_TEMP_THOLD = 30   # Freezer temperature alert threshold
+BUTTON_NODE_ID = "7967"       # Black Button
 
 SITT_GROUP = ['Sitt Front', 'Sitt Rear', 'Sitt Colour']
 
