@@ -453,6 +453,10 @@ class SensorObject:
         self.temp = None
         self.last_report = time.time()
 
+    def online(self):
+        """ We set sensor offline if the last_report is very old """
+        return time.time() - self.last_report < cfg.SENSOR_OFFLINE_TIME
+
     def update_temperature(self, temperature):
         """ Update the temperature, temp_high and last_report
 

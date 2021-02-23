@@ -22,6 +22,10 @@ class Sensor:
         self.temp_high = False
         self.long_press_received = False
 
+    def online(self):
+        """ Sensor online check """
+        return time.time() - self.last_report < cfg.SENSOR_OFFLINE_TIME
+
 
 class Bulb:
     """ Test Bulb """
@@ -93,7 +97,7 @@ class TempNormal(State):
             return TempHigh
 
         # If not recent reports then transition to state=SensorOffline
-        if time.time() - self.sensor.last_report > cfg.SENSOR_OFFLINE_TIME:
+        if not self.sensor.online():
             return SensorOffline
 
         return self
@@ -127,8 +131,7 @@ class Disabled(State):
         We use 1'C hysteresis from threshold to reset
     """
     def on_event(self):
-        if (self.sensor.temp_high is False and
-                time.time() - self.sensor.last_report < (60 * 12)):
+        if self.sensor.online() and not self.sensor.temp_high:
             LOGGER.debug("Temp is normal - enabling alarm")
             return TempNormal
         return self
@@ -154,7 +157,7 @@ class SensorOffline(State):
         # If we have a recent report then sensor is online
         # so tansition back to state=TempNormal
         state = None
-        if time.time() - self.sensor.last_report < (60 * 5):
+        if self.sensor.online():
             state = TempNormal
 
         # If we have a long_press on the button then we are
@@ -166,18 +169,17 @@ class SensorOffline(State):
         # If we are exiting this state then we may want to turn
         # the bulb off or set it to white
         if state:
-            if self.bulb.is_green:
+            if self.bulb.is_green():
                 LOGGER.debug("Setting bulb white_on")
                 self.bulb.set_white()
-            elif self.bulb.get_on_state == 0:
+            elif self.bulb.get_on_state() == 0:
                 LOGGER.debug("Setting bulb white_off")
                 self.bulb.set_white_off()
 
             return state
 
         # If we are staying here then we may need to turn the bulb
-        # green (we may have moved from out of hours to inside
-        # hours.
+        # green (we may have moved from out of hours to inside hours.
         schedule = cfg.FREEZER_SENSOR_OFFLINE_SCHEDULE
         if cfg.schedule_check(schedule) and not self.bulb.is_green():
             LOGGER.debug("Sensor Offline - setting bulb green")
@@ -260,77 +262,75 @@ def tests():
 
     sensor_sm = SensorStateMachine(bulb, sensor)
 
-    while True:
+    # TempNormal to Temp High
+    temp_high_event(sensor)
+    sensor_sm.on_event()
+    assert str(sensor_sm.state) == 'TempHigh'
+    LOGGER.debug("State = %s", sensor_sm.state)
 
-        # TempNormal to Temp High
-        temp_high_event(sensor)
-        sensor_sm.on_event()
-        assert str(sensor_sm.state) == 'TempHigh'
-        LOGGER.debug("State = %s", sensor_sm.state)
+    # Remain in TempHigh even if temp resets
+    temp_normal_event(sensor)
+    sensor_sm.on_event()
+    assert str(sensor_sm.state) == 'TempHigh'
+    assert bulb.is_blue()
+    LOGGER.debug("State = %s", sensor_sm.state)
 
-        # Remain in TempHigh even if temp resets
-        temp_normal_event(sensor)
-        sensor_sm.on_event()
-        assert str(sensor_sm.state) == 'TempHigh'
-        assert bulb.is_blue()
-        LOGGER.debug("State = %s", sensor_sm.state)
+    # Exit TempHigh to Disabled/Acknowledged
+    # Set temp high to make sure we stay in Disabled
+    temp_high_event(sensor)
+    long_press_event(sensor)
+    sensor_sm.on_event()
+    assert str(sensor_sm.state) == 'Disabled'
+    assert not sensor.long_press_received
+    assert bulb.is_white()
+    LOGGER.debug("State = %s", sensor_sm.state)
 
-        # Exit TempHigh to Disabled/Acknowledged
-        # Set temp high to make sure we stay in Disabled
-        temp_high_event(sensor)
-        long_press_event(sensor)
-        sensor_sm.on_event()
-        assert str(sensor_sm.state) == 'Disabled'
-        assert not sensor.long_press_received
-        assert bulb.is_white()
-        LOGGER.debug("State = %s", sensor_sm.state)
+    # Remain in Disabled
+    sensor_sm.on_event()
+    assert str(sensor_sm.state) == 'Disabled'
+    LOGGER.debug("State = %s", sensor_sm.state)
 
-        # Remain in Disabled
-        sensor_sm.on_event()
-        assert str(sensor_sm.state) == 'Disabled'
-        LOGGER.debug("State = %s", sensor_sm.state)
+    # Auto re-enable when temp drops again
+    temp_low_event(sensor)
+    sensor_sm.on_event()
+    assert str(sensor_sm.state) == 'TempNormal'
+    LOGGER.debug("State = %s", sensor_sm.state)
 
-        # Auto re-enable when temp drops again
-        temp_low_event(sensor)
-        sensor_sm.on_event()
-        assert str(sensor_sm.state) == 'TempNormal'
-        LOGGER.debug("State = %s", sensor_sm.state)
+    # Take sensor offline
+    sensor_offline_event(sensor)
+    sensor_sm.on_event()
+    assert str(sensor_sm.state) == 'SensorOffline'
+    assert bulb.is_green()
+    LOGGER.debug("State = %s", sensor_sm.state)
 
-        # Take sensor offline
-        sensor_offline_event(sensor)
-        sensor_sm.on_event()
-        assert str(sensor_sm.state) == 'SensorOffline'
-        assert bulb.is_green()
-        LOGGER.debug("State = %s", sensor_sm.state)
+    # Take sensor back online
+    sensor_online_event(sensor)
+    sensor_sm.on_event()
+    assert str(sensor_sm.state) == 'TempNormal'
+    assert bulb.is_white()
+    LOGGER.debug("State = %s", sensor_sm.state)
 
-        # Take sensor back online
-        sensor_online_event(sensor)
-        sensor_sm.on_event()
-        assert str(sensor_sm.state) == 'TempNormal'
-        assert bulb.is_white()
-        LOGGER.debug("State = %s", sensor_sm.state)
+    # Take sensor offline
+    sensor_offline_event(sensor)
+    sensor_sm.on_event()
+    assert str(sensor_sm.state) == 'SensorOffline'
+    assert bulb.is_green()
+    LOGGER.debug("State = %s", sensor_sm.state)
 
-        # Take sensor offline
-        sensor_offline_event(sensor)
-        sensor_sm.on_event()
-        assert str(sensor_sm.state) == 'SensorOffline'
-        assert bulb.is_green()
-        LOGGER.debug("State = %s", sensor_sm.state)
+    # Goto Disabled
+    long_press_event(sensor)
+    sensor_sm.on_event()
+    assert str(sensor_sm.state) == 'Disabled'
+    assert bulb.is_white()
+    assert not sensor.long_press_received
+    LOGGER.debug("State = %s", sensor_sm.state)
 
-        # Goto Disabled
-        long_press_event(sensor)
-        sensor_sm.on_event()
-        assert str(sensor_sm.state) == 'Disabled'
-        assert bulb.is_white()
-        assert not sensor.long_press_received
-        LOGGER.debug("State = %s", sensor_sm.state)
-
-        # Re-enable
-        temp_low_event(sensor)
-        sensor_sm.on_event()
-        assert str(sensor_sm.state) == 'TempNormal'
-        assert bulb.is_white()
-        LOGGER.debug("State = %s", sensor_sm.state)
+    # Re-enable
+    temp_low_event(sensor)
+    sensor_sm.on_event()
+    assert str(sensor_sm.state) == 'TempNormal'
+    assert bulb.is_white()
+    LOGGER.debug("State = %s", sensor_sm.state)
 
 
 if __name__ == "__main__":
