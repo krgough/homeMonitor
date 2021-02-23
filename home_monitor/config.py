@@ -3,15 +3,15 @@ Created on 21 Aug 2016
 
 @author: keith
 '''
-# USERNAME = username-here
-# PASSWORD = password-here
-# URL = 'https://api-prod.bgchprod.info'
+import datetime
 
 BELL_SOUND = None
 BELL_BUTTON_ID = None
 
 INDICATOR_BULB = "Sitt Colour"
 TRAIN_DELAY_INDICATION_SCHEDULE = [("06:00", "08:00")]
+FREEZER_SENSOR_OFFLINE_SCHEDULE = [("07:00", "22:00")]
+
 LOGFILE = "/tmp/home_monitor.log"
 
 LED_PORT = "/dev/ttyS0"
@@ -60,3 +60,74 @@ def get_dev(dev_name):
     dev = DEVS.get(dev_name)
     dev['name'] = dev_name
     return dev
+
+
+def schedule_check(schedule, check_time=None):
+    """ Check time is between begin and end
+        If check_time is not given then use current UTC time
+
+        Returns true if current time is between one of the schedule slots i.e.
+
+        True if slotstart <= current_time <= slot_end
+
+        We also handle the case where a slot straddles midnight.
+
+    """
+
+    for time_slot in schedule:
+        begin_time = datetime.time(int(time_slot[0].split(":")[0]),
+                                   int(time_slot[0].split(":")[1]))
+
+        end_time = datetime.time(int(time_slot[1].split(":")[0]),
+                                 int(time_slot[1].split(":")[1]))
+
+        # If check time is not given, default to current UTC time
+        check_time = check_time or datetime.datetime.utcnow().time()
+        if begin_time < end_time:
+            if begin_time <= check_time <= end_time:
+                return True
+
+        else:
+            # Else checktime is crossing midnight
+            if check_time >= begin_time or check_time <= end_time:
+                return True
+
+    return False
+
+
+def tests():
+    """ Run a few tests """
+
+    # Train delay indication schedule
+    schedule = TRAIN_DELAY_INDICATION_SCHEDULE
+    check_time = datetime.time(5, 59)
+    assert not schedule_check(schedule, check_time)
+
+    check_time = datetime.time(6, 0)
+    assert schedule_check(schedule, check_time)
+
+    check_time = datetime.time(8, 0)
+    assert schedule_check(schedule, check_time)
+
+    check_time = datetime.time(8, 1)
+    assert not schedule_check(schedule, check_time)
+
+    # Freezer Sensor Offline indication schedule
+    schedule = FREEZER_SENSOR_OFFLINE_SCHEDULE
+    check_time = datetime.time(6, 59)
+    assert not schedule_check(schedule, check_time)
+
+    check_time = datetime.time(7, 0)
+    assert schedule_check(schedule, check_time)
+
+    check_time = datetime.time(22, 0)
+    assert schedule_check(schedule, check_time)
+
+    check_time = datetime.time(22, 1)
+    assert not schedule_check(schedule, check_time)
+
+    print('All done.  All tests passed')
+
+
+if __name__ == "__main__":
+    tests()

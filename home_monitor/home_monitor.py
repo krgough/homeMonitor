@@ -23,7 +23,6 @@ import sys
 import getopt
 import json
 import time
-import datetime
 import threading
 import queue
 import re
@@ -190,25 +189,6 @@ def get_station_name(crs_code):
     return station_name
 
 
-def schedule_check():
-    """ Returns true if current time is an ON time for indications else false
-    """
-    now = datetime.datetime.now()
-    seconds_since_midnight = (now - now.replace(hour=0,
-                                                minute=0,
-                                                second=0,
-                                                microsecond=0)).total_seconds()
-
-    for time_slot in cfg.TRAIN_DELAY_INDICATION_SCHEDULE:
-        start_time = (int(time_slot[0].split(":")[0]) * 60 * 60) + \
-                     (int(time_slot[0].split(":")[1]) * 60)
-        stop_time = (int(time_slot[1].split(":")[0]) * 60 * 60) + \
-                    (int(time_slot[1].split(":")[1]) * 60)
-        if start_time <= seconds_since_midnight <= stop_time:
-            return True
-    return False
-
-
 def load_debug_delays():
     """ Load debug delays from a yaml file
     """
@@ -293,7 +273,8 @@ def hive_bulb_checks(delays, colour_bulb):
     """
     # Turn on the Hive bulb (to red) if we have a delay and the schedule
     # allows indications
-    if delays and schedule_check() and (colour_bulb.alert_active is False):
+    sched = cfg.TRAIN_DELAY_INDICATION_SCHEDULE
+    if delays and cfg.schedule_check(sched) and (not colour_bulb.alert_active):
         LOGGER.debug("Turn indicator bulb on.  Delays found & schedule is on")
         colour_bulb.set_red()
         colour_bulb.alert_active = True
@@ -308,7 +289,7 @@ def hive_bulb_checks(delays, colour_bulb):
 
     # Turn off hive bulb if schedule is off and we think we are
     # still showing an alert
-    if not schedule_check() and colour_bulb.alert_active:
+    if not cfg.schedule_check(sched) and colour_bulb.alert_active:
         colour_bulb.alert_active = False
         if colour_bulb.is_red():
             LOGGER.debug("Schedule is off, "
