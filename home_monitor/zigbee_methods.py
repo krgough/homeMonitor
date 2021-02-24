@@ -492,7 +492,7 @@ class SensorObject:
         if time.time() - self.last_report > (60 * 12):
             node_id = checkin_msg.split(',')[0].split(":")[1]
 
-            report_interval = "{:04x}".format(60 * 10)  # 10 mins
+            report_interval = "{:04x}".format(60 * 5)  # 10 mins
 
             bind_msg = ("at+bind:{node_id},3,{sensor_eui},"
                         "06,0402,{dongle_eui},01")
