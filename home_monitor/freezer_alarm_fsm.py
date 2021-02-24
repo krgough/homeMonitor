@@ -3,8 +3,7 @@ Created on 21 Feb 2021
 
 @author: keithgough
 
-TODO: Deal with red light conflict - No conf
-TODO: Move out of hours times to cfg
+TODO: Deal with red light conflict - Is there one?
 
 '''
 import time
@@ -290,6 +289,7 @@ def test1(ssm, sensor, bulb):
     cfg.FREEZER_SENSOR_OFFLINE_SCHEDULE = NIGHT
     bulb.bulb_on = False
     bulb.colour = 'white'
+
     sensor_offline_event(sensor)
     ssm.on_event()
     assert str(ssm.state) == 'OfflineNight'
