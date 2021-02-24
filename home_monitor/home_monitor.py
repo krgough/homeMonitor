@@ -381,7 +381,6 @@ def button_press_handler(button_press_queue, hive_indication, voice_strings):
     while True:
         if not button_press_queue.empty():
             cmd = button_press_queue.get()
-            print(cmd)
 
             # Handle main button presses
             # shortPress  = play latest train delay annoucement audio clip
@@ -405,7 +404,6 @@ def button_press_handler(button_press_queue, hive_indication, voice_strings):
 
             # Flush the queue here to avoid lots of bell ringing
             flush_queue(button_press_queue)
-            print()
 
         # If we have a temperature report then update the object
         # If we have a check-in from the sensor and we have not had a recent

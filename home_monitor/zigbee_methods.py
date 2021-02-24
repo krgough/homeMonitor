@@ -14,7 +14,7 @@ import zigbeetools.threaded_serial as at
 import config as cfg
 
 LOGGER = logging.getLogger(__name__)
-RETRY_TIMEOUT = 2
+RETRY_TIMEOUT = 0.5
 
 
 class OnOffObject:

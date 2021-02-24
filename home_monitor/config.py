@@ -12,7 +12,7 @@ INDICATOR_BULB = "Sitt Colour"
 TRAIN_DELAY_INDICATION_SCHEDULE = [("06:00", "08:00")]
 FREEZER_SENSOR_OFFLINE_SCHEDULE = [("08:01", "22:00")]
 
-FREEZER_TEMP_THOLD = 30        # Freezer temperature alert threshold
+FREEZER_TEMP_THOLD = -10       # Freezer temperature alert threshold
 SENSOR_OFFLINE_TIME = 60 * 60  # Time in seconds before we declare offline
 
 LOGFILE = "/tmp/home_monitor.log"
@@ -50,7 +50,7 @@ DEVS = {
     'Stair Plug': {'eui': '001E5E09020F2F53', 'ep': '09'},
     'Bed LEDs': {'eui': '001E5E0902171636', 'ep': '09'},
     'Garage Plug': {'eui': '001E5E09020DA01E', 'ep': '09'},
-    'Temperature Sensor': {'eui': '00124B0015D56962', 'ep': '06'}
+    'Temperature Sensor': {'eui': 'SED:00124B000DEF311B', 'ep': '06'}
 }
 
 
