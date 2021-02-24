@@ -50,7 +50,7 @@ DEVS = {
     'Stair Plug': {'eui': '001E5E09020F2F53', 'ep': '09'},
     'Bed LEDs': {'eui': '001E5E0902171636', 'ep': '09'},
     'Garage Plug': {'eui': '001E5E09020DA01E', 'ep': '09'},
-    'Temperature Sensor': {'eui': 'SED:00124B000DEF311B', 'ep': '06'}
+    'Temperature Sensor': {'eui': '00124B000DEF311B', 'ep': '06'}
 }
 
 
