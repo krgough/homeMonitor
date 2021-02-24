@@ -10,7 +10,7 @@ BELL_BUTTON_ID = None
 
 INDICATOR_BULB = "Sitt Colour"
 TRAIN_DELAY_INDICATION_SCHEDULE = [("06:00", "08:00")]
-FREEZER_SENSOR_OFFLINE_SCHEDULE = [("07:00", "22:00")]
+FREEZER_SENSOR_OFFLINE_SCHEDULE = [("08:01", "22:00")]
 
 FREEZER_TEMP_THOLD = 30       # Freezer temperature alert threshold
 SENSOR_OFFLINE_TIME = 60 * 1  # Time in seconds before we declare offline
