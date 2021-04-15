@@ -14,7 +14,7 @@ import zigbeetools.threaded_serial as at
 import config as cfg
 
 LOGGER = logging.getLogger(__name__)
-RETRY_TIMEOUT = 0.2
+RETRY_TIMEOUT = 0.5
 
 
 class OnOffObject:
@@ -274,7 +274,7 @@ class BulbObject(OnOffObject):
         if resp_value is None:
             LOGGER.error("Error setting bulb color/level")
 
-    def set_white(self, colour_temp, value):
+    def set_white(self, colour_temp=2700, value=100):
         """ colour_temp: 2700 = warm white, 4000 = cool white
             value (brightness): 0-100
         """
@@ -325,9 +325,6 @@ class BulbObject(OnOffObject):
         if resp_value is None:
             LOGGER.error("Error setting bulb to white.")
             return
-
-        if resp_value is None:
-            LOGGER.error("Error setting bulb level")
 
         return
 
@@ -447,20 +444,20 @@ class SensorObject:
         We typically can't send message to these because they are
         usually asleep.  So we can only listen to attributes being reported.
     """
-    def __init__(self, indicator_bulb):
+    def __init__(self):
 
-        # We use Blue colour on indicator bulb for a freezer over temp alert
-        # alarm_enabled parameter is a temporary setting to allow us to turn
-        # the freezer alarm on/off when the temperature is too high.  Once the
-        # temperature is cold this setting is premenantly enabled (i.e. True)
-        self.alarm_enabled = True
+        # We monitor teperature reports from the freezer and set temp_high
+        # if freezer warms about the threshold.  We reset temp_high when
+        # temperature falls below the threshold plus some hysteresis
         self.temp_high = False
         self.temp = None
         self.last_report = time.time()
-        self.indicator_bulb = indicator_bulb
-        self.last_indication = time.time()
 
-    def set_temperature(self, temperature):
+    def online(self):
+        """ We set sensor offline if the last_report is very old """
+        return time.time() - self.last_report < cfg.SENSOR_OFFLINE_TIME
+
+    def update_temperature(self, temperature):
         """ Update the temperature, temp_high and last_report
 
         """
@@ -474,54 +471,48 @@ class SensorObject:
         if self.temp_high and self.temp < (cfg.FREEZER_TEMP_THOLD - 1):
             self.temp_high = False
 
-    def indicate(self):
-        """ Timer to decide if we should re-indicate
-        """
-        if time.time() > self.last_indication + (60 * 10):
-            return True
-        return False
+    def set_temp_rpt_cfg(self, checkin_msg):
+        """ If we have not received a temperature report for seom time
+            and we recieve a checkin then reset the attribure report config
 
-    def update(self):
-        """ Simple State Machine
+            We expect a temp report every 5mins so we allow just over 10mins
+            for 2 missing readings before attempting the reset.
 
-            We can be enabled or disabled, transition is on Long Press
-            of the ZigBee button.
+            We need to set a binding on the temperature cluster and
+            the attribute report configuration
 
-            if disabled and temp is low (+ hystereisis) then re-enable
-            (this stop us forgetting to reset the alarm)
+            We extract the node id from the checkin message
+            (just in case the node ID changes on us)
 
-            If we are enabled and we have not recently set bulb colour:
-
-                if temp_high then show_blue
-                  or
-                if device_offline then show_green
+            These msgs are sent fire and forget.  There is little
+            point in waiting for the reply - they either work or
+            we try again next checkin
 
         """
-        # If last_report is stale (older than 1hr) then set temperature to None
-        # This is our flag that device is offline
-        if self.temp and time.time() > self.last_report + (60 * 60):
-            LOGGER.debug("No sensor report for 1hr.  Setting temp to None")
-            self.temp = None
+        if time.time() - self.last_report > (60 * 12):
+            node_id = checkin_msg.split(',')[0].split(":")[1]
 
-        # If we are not enabled and we have a temperature value
-        # and the temperture is low then enable the alarm
-        if not self.alarm_enabled and self.temp and not self.temp_high:
-            self.alarm_enabled = True
-            LOGGER.debug("Freezer alarm re-enabled.  Temp is low: %s",
-                         self.temp)
+            report_interval = "{:04x}".format(60 * 5)  # 10 mins
 
-        # If we are enabled and have not recently set the bulb
-        # and one of the alarm states is triggered then set the bulb
-        if self.indicate() and self.alarm_enabled:
-            if self.temp_high:
-                LOGGER.debug("OVER TEMP ALARM - Setting bulb blue")
-                self.last_indication = time.time()
-                # self.indicator_bulb.set_blue()
+            bind_msg = ("at+bind:{node_id},3,{sensor_eui},"
+                        "06,0402,{dongle_eui},01")
 
-            elif self.temp is None:
-                LOGGER.debug("FREEZER SENSOR OFFLINE - Setting bulb green")
-                self.last_indication = time.time()
-                # self.indicator_bulb.set_green()
+            cfg_rep = ("at+cfgrpt:{node_id},06,0,0402,0,0000,29,"
+                       "0001,{report_interval},0001")
+
+            LOGGER.debug("Resetting temperature attribute report config")
+            at.TX_QUEUE.put(
+                bind_msg.format(
+                    node_id=node_id,
+                    sensor_eui=cfg.DEVS['Temperature Sensor']['eui'],
+                    dongle_eui=cfg.HIVE_EUI)
+                )
+
+            at.TX_QUEUE.put(
+                cfg_rep.format(
+                    node_id=node_id,
+                    report_interval=report_interval)
+                )
 
 
 def main():
