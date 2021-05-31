@@ -4,6 +4,7 @@ Created on 21 Aug 2016
 @author: keith
 '''
 import datetime
+import pytz
 
 BELL_SOUND = None
 BELL_BUTTON_ID = None
@@ -63,6 +64,35 @@ def get_dev(dev_name):
     return dev
 
 
+def tz_aware(dt):
+    """ Check if datetime is tz_aware """
+    return dt.tzinfo is not None and dt.tzinfo.utcoffset(dt) is not None
+
+
+def is_dst(dt):
+    """ Check if DST is set for given datetime """
+    return dt.tzinfo._dst.seconds != 0  # pylint: disable=protected-access
+
+
+def local_time(dt=None, timezone="UTC"):
+    """ Take a given datetime and convert to local time in wanted timezone
+
+        If given DT is naive then assume it is UTC.
+        Make it TZ aware and then convert it to time in the wanted zone.
+
+    """
+    if dt is None:
+        dt = datetime.datetime.utcnow()
+
+    # If dt is naive then make it tz aware (we assume UTC to begin with)
+    if not tz_aware(dt):
+        dt = pytz.timezone('UTC').localize(dt)
+
+    # Shift to wanted timezone
+    dt = dt.astimezone(pytz.timezone(timezone))
+    return dt
+
+
 def schedule_check(schedule, check_time=None):
     """ Check time is between begin and end
         If check_time is not given then use current UTC time
@@ -74,7 +104,7 @@ def schedule_check(schedule, check_time=None):
         We also handle the case where a slot straddles midnight.
 
     """
-
+    in_sched = False
     for time_slot in schedule:
         begin_time = datetime.time(int(time_slot[0].split(":")[0]),
                                    int(time_slot[0].split(":")[1]))
@@ -82,50 +112,60 @@ def schedule_check(schedule, check_time=None):
         end_time = datetime.time(int(time_slot[1].split(":")[0]),
                                  int(time_slot[1].split(":")[1]))
 
-        # If check time is not given, default to current UTC time
-        check_time = check_time or datetime.datetime.utcnow().time()
+        # If check time is not given, default to current London time.
+        check_time = check_time.time() or local_time().time()
         if begin_time < end_time:
             if begin_time <= check_time <= end_time:
-                return True
+                in_sched = True
 
         else:
             # Else checktime is crossing midnight
             if check_time >= begin_time or check_time <= end_time:
-                return True
+                in_sched = True
 
-    return False
+    print(schedule, check_time, in_sched)
+    return in_sched
 
 
 def tests():
     """ Run a few tests """
 
-    # Train delay indication schedule
-    schedule = TRAIN_DELAY_INDICATION_SCHEDULE
-    check_time = datetime.time(5, 59)
-    assert not schedule_check(schedule, check_time)
+    lond = 'Europe/London'
+    rome = 'Europe/Rome'
 
-    check_time = datetime.time(6, 0)
-    assert schedule_check(schedule, check_time)
+    # System time is UTC so we convert our UCT times to local
+    # before comparing to the local schedule.
+    test_list = [
+        # Before DST
+        {'dt': (2021, 1, 1, 5, 59), 'tz': lond, 'result': False},
+        {'dt': (2021, 1, 1, 6, 0), 'tz': lond, 'result': True},
+        {'dt': (2021, 1, 1, 8, 0), 'tz': lond, 'result': True},
+        {'dt': (2021, 1, 1, 8, 1), 'tz': lond, 'result': False},
 
-    check_time = datetime.time(8, 0)
-    assert schedule_check(schedule, check_time)
+        # During DST
+        {'dt': (2021, 6, 1, 4, 59), 'tz': lond, 'result': False},
+        {'dt': (2021, 6, 1, 5, 0), 'tz': lond, 'result': True},
+        {'dt': (2021, 6, 1, 7, 0), 'tz': lond, 'result': True},
+        {'dt': (2021, 6, 1, 7, 1), 'tz': lond, 'result': False},
 
-    check_time = datetime.time(8, 1)
-    assert not schedule_check(schedule, check_time)
+        # Rome before DST
+        {'dt': (2021, 1, 1, 4, 59), 'tz': rome, 'result': False},
+        {'dt': (2021, 1, 1, 5, 0), 'tz': rome, 'result': True},
+        {'dt': (2021, 1, 1, 7, 0), 'tz': rome, 'result': True},
+        {'dt': (2021, 1, 1, 7, 1), 'tz': rome, 'result': False},
 
-    # Freezer Sensor Offline indication schedule
-    schedule = FREEZER_SENSOR_OFFLINE_SCHEDULE
-    check_time = datetime.time(6, 59)
-    assert not schedule_check(schedule, check_time)
+        # Rome during DST
+        {'dt': (2021, 6, 1, 3, 59), 'tz': rome, 'result': False},
+        {'dt': (2021, 6, 1, 4, 0), 'tz': rome, 'result': True},
+        {'dt': (2021, 6, 1, 6, 0), 'tz': rome, 'result': True},
+        {'dt': (2021, 6, 1, 7, 1), 'tz': rome, 'result': False},
+        ]
 
-    check_time = datetime.time(7, 0)
-    assert schedule_check(schedule, check_time)
-
-    check_time = datetime.time(22, 0)
-    assert schedule_check(schedule, check_time)
-
-    check_time = datetime.time(22, 1)
-    assert not schedule_check(schedule, check_time)
+    sched = TRAIN_DELAY_INDICATION_SCHEDULE
+    for test in test_list:
+        dt = datetime.datetime(*test['dt'])
+        dt = local_time(dt, timezone=test['tz'])
+        assert schedule_check(sched, dt) == test['result']
 
     print('All done.  All tests passed')
 
