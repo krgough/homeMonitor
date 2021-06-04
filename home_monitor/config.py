@@ -10,6 +10,7 @@ BELL_SOUND = None
 BELL_BUTTON_ID = None
 
 INDICATOR_BULB = "Sitt Colour"
+TIMEZONE = 'Europe/London'
 TRAIN_DELAY_INDICATION_SCHEDULE = [("06:00", "08:00")]
 FREEZER_SENSOR_OFFLINE_SCHEDULE = [("08:01", "22:00")]
 
@@ -74,7 +75,7 @@ def is_dst(dt):
     return dt.tzinfo._dst.seconds != 0  # pylint: disable=protected-access
 
 
-def local_time(dt=None, timezone="UTC"):
+def local_time(dt=None, timezone=TIMEZONE):
     """ Take a given datetime and convert to local time in wanted timezone
 
         If given DT is naive then assume it is UTC.
@@ -113,7 +114,8 @@ def schedule_check(schedule, check_time=None):
                                  int(time_slot[1].split(":")[1]))
 
         # If check time is not given, default to current London time.
-        check_time = check_time.time() or local_time().time()
+        check_time = check_time or local_time()
+        check_time = check_time.time()
         if begin_time < end_time:
             if begin_time <= check_time <= end_time:
                 in_sched = True
@@ -166,6 +168,9 @@ def tests():
         dt = datetime.datetime(*test['dt'])
         dt = local_time(dt, timezone=test['tz'])
         assert schedule_check(sched, dt) == test['result']
+
+    print(local_time())
+    schedule_check(sched)
 
     print('All done.  All tests passed')
 
