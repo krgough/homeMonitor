@@ -75,8 +75,8 @@ interfaces, enable w1
 # CRONTAB Entries
 
 # KG: Hot water cylinder data logging
-*/10 * * * * /home/pi/repositories/telemetry/cylinder_read.py -s > /dev/null 2>&1
+*/10 * * * * /home/pi/repositories/telemetryModule/src/cylinder_read.py -s > /dev/null 2>&1
 
 # KG: Hot water level UDP server
-* * * * * /home/pi/repositories/telemetry/create_hot_water_udp_server.sh > /dev/null 2>&1
+* * * * * /home/pi/repositories/telemetryModule/src/create_hot_water_udp_server.sh > /dev/null 2>&1
 ```
