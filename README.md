@@ -80,5 +80,3 @@ interfaces, enable w1
 # KG: Hot water level UDP server
 * * * * * /home/pi/repositories/telemetry/create_hot_water_udp_server.sh > /dev/null 2>&1
 ```
-
--
