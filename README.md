@@ -68,11 +68,14 @@ We have several module that can be used as follows:
 # Clone the telemetry repo and then setup CRON to read the temperature values and run the UDP listener (server).
 git clone https://github.com/krgough/telemetryModule.git
 
+# Setup 1-Wire
+sudo raspi-config
+interfaces, enable w1
+
 # CRONTAB Entries
 
 # KG: Hot water cylinder data logging
-*
-/10 * * * * /home/pi/repositories/telemetry/cylinder_read.py -s > /dev/null 2>&1
+*/10 * * * * /home/pi/repositories/telemetry/cylinder_read.py -s > /dev/null 2>&1
 
 # KG: Hot water level UDP server
 * * * * * /home/pi/repositories/telemetry/create_hot_water_udp_server.sh > /dev/null 2>&1
