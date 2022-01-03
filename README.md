@@ -47,16 +47,22 @@ We have 2 ZigBee USB devices attached to the rpi:
 
 We use our own network for the button and the temperature sensor to prevent the Hive hub code overwriting the attributes that we have set on those devices.  Note also the the ZigBee button uses an NXP device and SW stack.  This device does not always work correctly when used in a network of SiLabs devices and can drop offline (particularly if routing through another device).  Keeping the button on a separate small network seems to keep it online.
 
+For the temperature sensor:
+
+*   Pair a USB stick to the Hive network but set the device type to be 0x01 rather than 0x07.  This stops it appearing as a second hub (co-ordinator).
+*   Pair the temperature sensor (door/window sensor) to the Hive network - monitor the USB stick using a serial terminal program during the device pairing.  This allows you to capture the node id when it joins.
+*   Set additional pairing and attribute reporting on that sensor as shown below...
+
 ```
 # Device EUI is reported in the SED message (the device announce)
 # USB node EUI is found using the 'ATI' command
 
 # Set Bindings on the poll control cluster and the temperature reporting cluster
-at+bind:137F,3,00124B000DEF311B,06,0020,9DC2C7D98E890727,01
-at+bind:8090,3,00124B000DEF311B,06,0402,9DC2C7D98E890727,01
+at+bind:{sensor_node_id},3,{sensor_eui},06,0020,{usb_eui},01
+at+bind:{sensor_node_id},3,{sensor_eui},06,0402,{usb_eui},01
 
-# Set reporting config for the measured temperature
-at+cfgrpt:137f,06,0,0402,0,0000,29,0001,012C,0001
+# Set reporting config for the measured temperature. 0x012C = 5*60 = 5mins
+at+cfgrpt:{sensor_node_id},06,0,0402,0,0000,29,0001,012C,0001
 ```
 
 ### Configuration
