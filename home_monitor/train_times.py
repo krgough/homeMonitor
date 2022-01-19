@@ -220,9 +220,9 @@ def get_board(board_name, crs, filter_crs, filter_type,
                 serv['platform'] = service['platform']
                 results.append(serv)
         except (KeyError, TypeError):
-            LOGGER.debug('ERROR parsing delays board in get_board()')
+            LOGGER.debug('ERROR parsing delays board in get_board(). %s', resp)
     else:
-        LOGGER.debug('ERROR parsing delays board in get_board()')
+        LOGGER.debug('ERROR parsing delays board in get_board(). %s', resp)
     return results
 
 
