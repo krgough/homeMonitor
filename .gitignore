@@ -2,3 +2,4 @@
 .project
 .pydevproject
 home_monitor/__pycache__/
+home_monitor/udpcomms/__pycache__/
