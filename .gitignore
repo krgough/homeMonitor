@@ -3,3 +3,4 @@
 .pydevproject
 home_monitor/__pycache__/
 home_monitor/udpcomms/__pycache__/
+.vscode/settings.json

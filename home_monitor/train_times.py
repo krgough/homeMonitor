@@ -10,13 +10,11 @@ Huxley - UK Live Train Status - https://huxley.unop.uk/
 Users should first get a user token from Nation Rail enquiries:
 https://realtime.nationalrail.co.uk/OpenLDBWSRegistration/Registration
 
-Token should be saved in a file called apiTokens.txt in this form:
+Token should be saved as an env var called NATIONAL_RAIL_TOKEN
+Suggest setting these in /etc/environment as follows...
 
-NATIONAL_RAIL_TOKEN=<insert-token-here>
-The path to apiTokens.txt file shall be the HIVE_API_PATH environment
-var plus /cfg/apiTokens.txt
-
-e.g. <HIVE_API_PATH>/cfg/apiTokens.txt
+# KG: National Rail Token for API access
+export NATIONAL_RAIL_TOKEN='<TOKEN_HERE>'
 
 25/11/2019 Keith Gough
 PEP8 Updates
