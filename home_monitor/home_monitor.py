@@ -282,20 +282,21 @@ def hive_bulb_checks(delays, colour_bulb):
     # Turn off the Hive bulb if no delays and we think we are
     # still showing an alert
     if (not delays) and colour_bulb.alert_active:
-        colour_bulb.alert_active = False
         if colour_bulb.is_red():
             LOGGER.debug("Turn indicator bulb off.  No more delays")
             colour_bulb.set_white_off()
+            if not colour_bulb.is_red():
+                colour_bulb.alert_active = False
 
     # Turn off hive bulb if schedule is off and we think we are
     # still showing an alert
     if not cfg.schedule_check(sched) and colour_bulb.alert_active:
-        colour_bulb.alert_active = False
         if colour_bulb.is_red():
             LOGGER.debug("Schedule is off, "
                          "bulb is indicating delays so we turn it off")
-
             colour_bulb.set_white_off()
+            if not colour_bulb.is_red():
+                colour_bulb.alert_active = False
 
 
 def button_press(cmd, sitt_group, freezer_sensor, voice_strings):
