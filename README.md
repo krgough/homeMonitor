@@ -1,8 +1,8 @@
 # homeMonitor
 
-Uses ZigBee USB devices running AT command firmware to monitor and control ZigBee devices in the home.  We have a speaker attached to the rPi audio port so that we can use a text to speech to read out train delay and other information.
+Uses ZigBee USB devices running AT command firmware to monitor and control ZigBee devices in the home. We have a speaker attached to the rPi audio port so that we can use a text to speech to read out train delay and other information.
 
-We have a second rPi close the hot water cylinder that monitors temperature sensors on the cylinder.  We then make an approximation of the 45'C level in the tank as a percentage.  We have a UDP listener running on the rPi that will send the hot-water level on receipt of the command "uwl=?" (usable hot water level)
+We have a second rPi close the hot water cylinder that monitors temperature sensors on the cylinder. We then make an approximation of the 45'C level in the tank as a percentage. We have a UDP listener running on the rPi that will send the hot-water level on receipt of the command "uwl=?" (usable hot water level)
 
 ```
                        HIVE_ZIGBEE_USB < zigbee > HIVE DEVICES (Bulbs etc)
@@ -43,14 +43,14 @@ Use these command line options:
 We have 2 ZigBee USB devices attached to the rpi:
 
 *   One paired to the Hive network to allow us to send and receive commands on that network
-*   One setup as a co-ordinator for a separate network.  We use this to monitor a button (for turning lights on/off) and a temperature sensor (contact sensor in freezer).
+*   One setup as a co-ordinator for a separate network. We use this to monitor a button (for turning lights on/off) and a temperature sensor (contact sensor in freezer).
 
-We use our own network for the button and the temperature sensor to prevent the Hive hub code overwriting the attributes that we have set on those devices.  Note also the the ZigBee button uses an NXP device and SW stack.  This device does not always work correctly when used in a network of SiLabs devices and can drop offline (particularly if routing through another device).  Keeping the button on a separate small network seems to keep it online.
+We use our own network for the button and the temperature sensor to prevent the Hive hub code overwriting the attributes that we have set on those devices. Note also the the ZigBee button uses an NXP device and SW stack. This device does not always work correctly when used in a network of SiLabs devices and can drop offline (particularly if routing through another device). Keeping the button on a separate small network seems to keep it online.
 
 For the temperature sensor:
 
-*   Pair a USB stick to the Hive network but set the device type to be 0x01 rather than 0x07.  This stops it appearing as a second hub (co-ordinator).
-*   Pair the temperature sensor (door/window sensor) to the Hive network - monitor the USB stick using a serial terminal program during the device pairing.  This allows you to capture the node id when it joins.
+*   Pair a USB stick to the Hive network but set the device type to be 0x01 rather than 0x07. This stops it appearing as a second hub (co-ordinator).
+*   Pair the temperature sensor (door/window sensor) to the Hive network - monitor the USB stick using a serial terminal program during the device pairing. This allows you to capture the node id when it joins.
 *   Set additional pairing and attribute reporting on that sensor as shown below...
 
 ```
@@ -67,18 +67,30 @@ at+cfgrpt:{sensor_node_id},06,0,0402,0,0000,29,0001,012C,0001
 
 ### Configuration
 
-Config.py contains all the configuration parameters.
+Config.py contains most of the configuration parameters.
 
 We have several module that can be used as follows:
 
-*   home\_monitor.py - The main program.  Start this using the startWinToWatTrainMonotor.sh from CRON
-*   gpio\_monitor.py - Monitors a physical switch connection on a gpio line on the rPi.  Can use this to trigger reports.
+*   home\_monitor.py - The main program. Start this using the startWinToWatTrainMonotor.sh from CRON
+*   gpio\_monitor.py - Monitors a physical switch connection on a gpio line on the rPi. Can use this to trigger reports.
 *   startGpioMonitor.sh - script to check if gpio\_monitor.py is running (Use this from CRON)
 *   button\_listener.py - Listens for incoming commands or attribute reports on the private ZigBee network.
-*   led\_pattern\_generator.py - Generates nice patterns on a Hive Sense LED indicator ring.  LED ring needs to be attached via UART to the rPi.
+*   led\_pattern\_generator.py - Generates nice patterns on a Hive Sense LED indicator ring. LED ring needs to be attached via UART to the rPi.
 *   train\_times.py - Use the Huxley API (wraps the Network Rail soap API with a rest API) to get train data.
-*   test\_delays.yaml.old - Test data in a yaml file.  Rename to remove 'old' to use it.
+*   test\_delays.yaml.old - Test data in a yaml file. Rename to remove 'old' to use it.
 *   zigbee\_methods.py - Module that handles all the interactions with ZigBee devices on the Hive network.
+
+### /etc/environment
+
+Contains the env vars required
+
+\# KG: National Rail Token for API access
+
+export NATIONAL\_RAIL\_TOKEN='token-here-keep-quotes'
+
+\# KG: Token for pathname to token.file for hive api calls.
+
+export HIVE\_API\_PATH='/home/pi/repositories/apiLogger/'
 
 ### Hot Water RPI Setup
 
