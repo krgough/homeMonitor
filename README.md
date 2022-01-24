@@ -80,10 +80,7 @@ We have several module that can be used as follows:
 *   test\_delays.yaml.old - Test data in a yaml file. Rename to remove 'old' to use it.
 *   zigbee\_methods.py - Module that handles all the interactions with ZigBee devices on the Hive network.
 
-/etc/environment
-
-Contains the env vars required
-
+/etc/environment - Contains the env vars required
 ```
 # KG: National Rail Token for API access
 export NATIONAL_RAIL_TOKEN='token-here-keep-quotes'
