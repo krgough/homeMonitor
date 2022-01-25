@@ -22,24 +22,23 @@ import time
 
 LOGGER = logging.getLogger(__name__)
 
-ADDRESS = ('255.255.255.255', 10000)
-UWL_MESSAGE = 'uwl?'
-UWL_RESP = 'uwl='
+ADDRESS = ("255.255.255.255", 10000)
+UWL_MESSAGE = "uwl?"
+UWL_RESP = "uwl="
 
 SOCK_TIMEOUT = 1
-SOCK_RETRIES = 5 # 20 retries takes too long
+SOCK_RETRIES = 5  # 20 retries takes too long
+
 
 def send_with_retries(sock, msg, expected_resp, addr):
-    """ Send the message with retry attempts if necessary
-
-    """
+    """Send the message with retry attempts if necessary"""
     for attempt in range(SOCK_RETRIES):
         # Send data
-        LOGGER.debug('sending %s', msg)
+        LOGGER.debug("sending %s", msg)
         sock.sendto(msg.encode(), addr)
 
         # Receive response
-        LOGGER.debug('Attempt %s. Waiting to receive...', attempt)
+        LOGGER.debug("Attempt %s. Waiting to receive...", attempt)
 
         try:
             data, server = sock.recvfrom(1024)
@@ -53,10 +52,9 @@ def send_with_retries(sock, msg, expected_resp, addr):
             return data, server
     return None, None
 
-def send_cmd(msg, expected_resp, addr):
-    """ Send UDP message and wait for the expected response
 
-    """
+def send_cmd(msg, expected_resp, addr):
+    """Send UDP message and wait for the expected response"""
     # Create a UDP socket
     # Setup to use the broadcast address
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -69,14 +67,14 @@ def send_cmd(msg, expected_resp, addr):
     # Send the command
     data, server = send_with_retries(sock, msg, expected_resp, addr)
 
-    LOGGER.debug('received "%s", from %s', data, server)
-    LOGGER.debug('closing socket')
+    LOGGER.debug("received '%s', from %s", data, server)
+    LOGGER.debug("closing socket")
     sock.close()
     return data
 
+
 def test_client():
-    """ Count how many attempts before no reply
-    """
+    """Count how many attempts before no reply"""
     count = 0
     while count < 100:
         data = send_cmd(UWL_MESSAGE, UWL_RESP, ADDRESS)
@@ -86,9 +84,10 @@ def test_client():
         if not data:
             break
 
-    LOGGER.debug('Test stopped at count = %s', count)
+    LOGGER.debug("Test stopped at count = %s", count)
+
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
     send_cmd(UWL_MESSAGE, UWL_RESP, ADDRESS)
-    #test_client()
+    # test_client()

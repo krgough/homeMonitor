@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-'''
+"""
 Created on 8 Nov 2018
 
 @author: Keith.Gough
@@ -21,8 +21,8 @@ Adding some code to listen for the temperature reports from a contact sensor.
 This sensor will be placed in the garage freezer.  If the temp rises above
 our threshold then we warn the users (email or blue light??)
 
+"""
 
-'''
 import time
 import sys
 import datetime
@@ -52,8 +52,8 @@ def start_serial_port_thread(port, baud):
                                    args=(port, baud))
     read_thread.daemon = True  # This kills the thread when main program exits
     read_thread.start()
-    read_thread.name = 'readThread'
-    LOGGER.info('Serial port read handler thread started.')
+    read_thread.name = "readThread"
+    LOGGER.info("Serial port read handler thread started.")
 
     return read_thread
 
@@ -69,13 +69,13 @@ def serial_read_handler(port, baud):
         # global SER
         # SER = serialPort
     except IOError as err:
-        LOGGER.error('Error opening port. %s', err)
+        LOGGER.error("Error opening port. %s", err)
         sys.exit()
     LOGGER.info("Serial port opened... %s", port)
 
     while True:
-        reading = ser.readline().decode(errors='replace').strip()
-        if reading != '':
+        reading = ser.readline().decode(errors="replace").strip()
+        if reading != "":
             if RX_QUEUE.full():
                 LOGGER.info("*** DEBUG: rxQ is full.  Dumping oldest message")
                 RX_QUEUE.get()
@@ -86,8 +86,7 @@ def serial_read_handler(port, baud):
 
 
 def main(port, baud, button_press_q):
-    """ Main program
-    """
+    """Main program"""
     read_thread = start_serial_port_thread(port=port, baud=baud)
 
     # Monitor the Rx Queue and intercept button press messages
@@ -105,8 +104,8 @@ def main(port, baud, button_press_q):
                 # 04 = Short press
                 # 08 = double press
                 # 10 = long press
-                node_id = msg.split(':')[1][:4]
-                msg_code = msg.split(',')[-1]
+                node_id = msg.split(":")[1][:4]
+                msg_code = msg.split(",")[-1]
                 button_press_q.put({"nodeId": node_id, "msgCode": msg_code})
                 LOGGER.debug("BUTTON PRESS, %s, %s", node_id, msg_code)
 
@@ -117,7 +116,7 @@ def main(port, baud, button_press_q):
             if re.match(contact_regex, msg):
                 # On PIR 0020/0021 = open/closed
                 # On Contact we are moitoring temperature
-                node_id = msg.split(':')[1][:4]
+                node_id = msg.split(":")[1][:4]
                 temperature = msg.split(",")[-1]
                 temperature = hex_temp.convert_s16(temperature)/100
 

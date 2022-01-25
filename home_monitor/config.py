@@ -55,6 +55,8 @@ DEVS = {
     'Temperature Sensor': {'eui': '00124B000DEF311B', 'ep': '06'}
 }
 
+# pylint: disable=invalid-name
+
 
 def get_dev(dev_name):
     """ Get the wanted device from DEVS and return a dict

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-'''
+"""
 Created on 26 Nov 2018
 
 @author: Keith.Gough
@@ -12,11 +12,11 @@ We set the internal pullup on the GPIO and then setup button to pull low.
 25/11/2019
 Edited to comply with PEP8 (pylint).
 
-'''
+"""
 import time
 import logging
 
-import RPi.GPIO as GPIO  # @UnresolvedImport
+from RPi import GPIO  # @UnresolvedImport
 
 from home_monitor import Voice
 

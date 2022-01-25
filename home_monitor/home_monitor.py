@@ -38,6 +38,7 @@ import train_times as tt
 import led_pattern_generator as led
 import button_listener as bl
 import config as cfg
+
 # import api_methods as api  # old hive API's (now closed down)
 import zigbee_methods as api  # Control using Zigbee AT commands
 import gpio_monitor as gm
@@ -49,15 +50,16 @@ DELAY_CHECK_SLEEP_TIME = 5 * 60
 
 
 def get_args():
-    """ Read command line parameters
-    """
+    """Read command line parameters"""
     # NOTE to self - Cannot use f strings in python ver < 3.6
-    help_string = dedent("""
-    USAGE: {} [-h] [-l] [-b] [-g] [-z] -t to_station -f from_station
+    help_string = dedent(
+        f"""
+    USAGE: {os.path.basename(__file__)} [-hlbgz] -t to_station -f from_station
 
     Use these command line options:
 
     -h                      Print this help
+
     -l                      Show delays on HH360 LED indicator board
 
     -b                      Show delays on hive colour bulb
@@ -70,7 +72,8 @@ def get_args():
 
     -t 'to' stationId       CRS code for station e.g. wat for Waterloo
     -f 'from' stationId     CRS code for station
-    """.format(os.path.basename(__file__)))
+    """
+    )
 
     to_station = None
     from_station = None
@@ -195,7 +198,7 @@ def load_debug_delays():
     try:
         fdir = os.path.dirname(os.path.realpath(__file__))
         filename = os.path.join(fdir, 'test_delays.yaml')
-        with open(filename, 'r') as file:
+        with open(filename, 'r', encoding='utf-8') as file:
             return yaml.safe_load(file.read())
 
     except FileNotFoundError:
@@ -335,10 +338,10 @@ def button_press(cmd, sitt_group, freezer_sensor, voice_strings):
                                    udp_cli.UWL_RESP,
                                    udp_cli.ADDRESS)
 
-            hw_msg = "Hot water is at {}".format(uwl)
+            hw_msg = f"Hot water is at {uwl}"
 
             freezer_sensor.long_press_received = True
-            fr_msg = " Freezer Temperature is {}".format(freezer_sensor.temp)
+            fr_msg = f" Freezer Temperature is {freezer_sensor.temp}"
             msg = [hw_msg, fr_msg]
             voice_strings.play(msg)
 
@@ -349,8 +352,8 @@ def doorbell_press(colour_bulb):
         Play doorbell sound and breifly turn bulb on/red.
     """
     # For any bell press change indicator bulb red and play the bell sound
-    cmd = 'aplay {} &'.format(cfg.BELL_SOUND)
-    my_pipe = os.popen(cmd, 'w')
+    cmd = f"aplay {cfg.BELL_SOUND} &"
+    my_pipe = os.popen(cmd, "w")
     my_pipe.close()
 
     # While the bell is ringing we change the bulb colour briefly
@@ -462,23 +465,22 @@ class Voice():
                 LOGGER.debug("Error parsing times in build_voice_string")
                 delay_time = None
 
-            voice_string = "The {} from {} to {}, is ".format(delay['std'],
-                                                              from_station,
-                                                              to_station)
-            if delay['isCancelled']:
+            voice_string = (
+                f"The {delay['std']} from {from_station} to {to_station}, is "
+            )
 
+            if delay['isCancelled']:
                 if delay['cancelReason']:
-                    voice_string += "cancelled. {}.".format(
-                        delay['cancelReason'])
+                    voice_string += f"cancelled. {delay['cancelReason']}."
                 else:
                     voice_string += "cancelled."
             else:
                 voice_string += "delayed"
                 if delay_time:
-                    voice_string += " by {} minutes.".format(delay_time)
+                    voice_string += f" by {delay_time} minutes."
 
                 if delay['delayReason']:
-                    voice_string += ". {}.".format(delay['delayReason'])
+                    voice_string += f". {delay['delayReason']}."
 
             self.strings.append(voice_string)
 
@@ -516,8 +518,8 @@ def check_usb_dongles():
 
     for dongle in dongles:
         if not os.path.exists(dongle):
-            msg = ('Dongle port {} does not exist. See config.py '
-                   'for instructions on how to configure'.format(dongle))
+            msg = ('Dongle port {dongle} does not exist. See config.py '
+                   'for instructions on how to configure')
             LOGGER.error(msg)
             return False
     return True

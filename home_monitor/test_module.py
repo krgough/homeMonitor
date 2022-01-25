@@ -30,7 +30,7 @@ def main():
 
                 dongle_eui = "000D6F000C44F290"
                 sensor_eui = "00124B0015D56962"
-                rpt_interval = "{:04x}".format(60 * 10)
+                rpt_interval = "{60*10:04x}"
                 bind_msg = ("at+bind:{node_id},3,{sensor_eui},06,0402,"
                             "{dongle_eui},01")
                 set_report = ("at+cfgrpt:{node_id},06,0,0402,0,0000,29,0001,"

@@ -76,15 +76,15 @@ API_URL = "https://huxley.apphb.com"
 def get_args():
     """ Read command line parameters
     """
-    help_string = dedent("""
-    USAGE: {} [-h] -t to_station -f from_station
+    help_string = dedent(f"""
+    USAGE: {os.path.basename(__file__)} [-h] -t to_station -f from_station
 
     Use these command line options:
 
     -h                      Print this help
     -t 'to' stationId       CRS code for station e.g. wat for Waterloo
     -f 'from' stationId     CRS code for station
-    """.format(os.path.basename(__file__)))
+    """)
 
     my_to_station = None
     my_from_station = None
@@ -135,17 +135,17 @@ def api_call(method, url, expected_resp=200):
 def get_url(board, crs, filter_type, filter_crs, times=None):
     """ Make the API call
     """
-    url = "{}/{}/{}".format(API_URL, board, crs)
+    url = f"{API_URL}/{board}/{crs}"
     # if filter_type: url = url + "/{}/{}/all".format(filter_type,filter_crs)
 
     if filter_type:
-        url = url + "/{}/{}".format(filter_type, filter_crs)
+        url = f"{url}/{filter_type}/{filter_crs}"
 
     # if numRows: url = url + "/{}".format(numRows)
     if times:
-        url = url + "/10/{}".format(times)
+        url = f"{url}/10/{times}"
 
-    url = url + "?accessToken={}".format(ACCESS_TOKEN)
+    url = f"{url}?accessToken={ACCESS_TOKEN}"
 
     # resp = requests.get(url)
     # resp_status = True
@@ -157,8 +157,7 @@ def get_url(board, crs, filter_type, filter_crs, times=None):
 def get_service(service_id):
     """ GET /service/{Service ID}?accessToken={Your GUID token}
     """
-    url = "{}/service/{}?accessToken={}".format(
-            API_URL, service_id, ACCESS_TOKEN)
+    url = f"{API_URL}/service/{service_id}?accessToken={ACCESS_TOKEN}"
     # resp = requests.get(url)
     # resp_status = bool(resp.status_code == 200)
     resp_status, resp = api_call("GET", url)
@@ -170,9 +169,9 @@ def get_stations(station_name=None):
          Returns all stations if station_name is None
     """
     if station_name:
-        url = "{}/crs/{}?{}".format(API_URL, station_name, ACCESS_TOKEN)
+        url = f"{API_URL}/crs/{station_name}?{ACCESS_TOKEN}"
     else:
-        url = "{}/crs?{}".format(API_URL, ACCESS_TOKEN)
+        url = f"{API_URL}/crs?{ACCESS_TOKEN}"
     # resp = requests.get(url)
     # resp_status = bool(resp.status_code == 200)
     resp_status, resp = api_call("GET", url)
@@ -288,7 +287,7 @@ def main():
     print_data("Delays:",
                get_delays(from_station, to_station, pretty_print=False))
 
-    print('All done.')
+    print("All done.")
 
 
 if __name__ == "__main__":
