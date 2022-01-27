@@ -32,10 +32,10 @@ GPIO.setup(GPIO_CHANNEL, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 
 
 def my_callback(_, voice_strings):
-    """ RPi.GPIO Callback
+    """RPi.GPIO Callback
 
-        First unused parameter above is required by RPi.GPIO to work
-        GPIO.add_event_detect passes channel as first parameter
+    First unused parameter above is required by RPi.GPIO to work
+    GPIO.add_event_detect passes channel as first parameter
     """
     timeout = time.time() + MIN_BUTTON_PRESS_DURATION
     # Ignore glitches. Button press must be > MIN_BUTTON_PRESS_DURATION
@@ -53,7 +53,7 @@ def my_callback(_, voice_strings):
 
 
 def main(voice_strings):
-    """ Main Program """
+    """Main Program"""
     # Attach the callback function.  Note the debounce value
 
     # event_detect always passes channel as the first parameter so even if we

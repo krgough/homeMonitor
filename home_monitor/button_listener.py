@@ -44,12 +44,12 @@ BAUD = 115200
 
 
 def start_serial_port_thread(port, baud):
-    """ Start a thread to read serial port and put incomming messages
-        on the RX_QUEUE
+    """Start a thread to read serial port
+
+    Puts incomming messages on the RX_QUEUE
     """
     # Start the serial port handler thread
-    read_thread = threading.Thread(target=serial_read_handler,
-                                   args=(port, baud))
+    read_thread = threading.Thread(target=serial_read_handler, args=(port, baud))
     read_thread.daemon = True  # This kills the thread when main program exits
     read_thread.start()
     read_thread.name = "readThread"
@@ -59,9 +59,9 @@ def start_serial_port_thread(port, baud):
 
 
 def serial_read_handler(port, baud):
-    """ Serial port read thread handler
-        If serial timeout=None then this thread blocks until a new line is
-        available
+    """Serial port read thread handler
+
+    If serial timeout=None then thread blocks until a new line is available
     """
     # Open the serial port
     try:
@@ -118,10 +118,9 @@ def main(port, baud, button_press_q):
                 # On Contact we are moitoring temperature
                 node_id = msg.split(":")[1][:4]
                 temperature = msg.split(",")[-1]
-                temperature = hex_temp.convert_s16(temperature)/100
+                temperature = hex_temp.convert_s16(temperature) / 100
 
-                button_press_q.put({"nodeId": node_id,
-                                    "temperature": temperature})
+                button_press_q.put({"nodeId": node_id, "temperature": temperature})
 
                 LOGGER.debug("TEMPERATURE, %s, %s", node_id, temperature)
 
@@ -135,8 +134,7 @@ def main(port, baud, button_press_q):
 
 
 def test():
-    """ Run this to test the button listener
-    """
+    """Run this to test the button listener"""
     button_press_q = queue.Queue()
     main(port=PORT, baud=BAUD, button_press_q=button_press_q)
 

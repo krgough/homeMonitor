@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-'''
+"""
 Created on 7 Nov 2018
 
 @author: Keith.Gough
@@ -15,7 +15,7 @@ for the delayed train services.
 25/11/2019 Keith Gough
 PEP8 Updates.
 
-'''
+"""
 
 
 import os
@@ -38,6 +38,7 @@ import train_times as tt
 import led_pattern_generator as led
 import button_listener as bl
 import config as cfg
+import hive_alarm
 
 # import api_methods as api  # old hive API's (now closed down)
 import zigbee_methods as api  # Control using Zigbee AT commands
@@ -54,11 +55,13 @@ def get_args():
     # NOTE to self - Cannot use f strings in python ver < 3.6
     help_string = dedent(
         f"""
-    USAGE: {os.path.basename(__file__)} [-hlbgz] -t to_station -f from_station
+    USAGE: {os.path.basename(__file__)} [-halbgz] -t to_station -f from_station
 
     Use these command line options:
 
     -h                      Print this help
+
+    -a                      Arm/Disarm alarm based on schedule (in config)
 
     -l                      Show delays on HH360 LED indicator board
 
@@ -75,152 +78,165 @@ def get_args():
     """
     )
 
-    to_station = None
-    from_station = None
-    use_leds = False
-    use_hive = False
-    use_gpios = False
-    zigbee_button = False
+    args = {
+        "to_station": None,
+        "from_station": None,
+        "use_leds": False,
+        "use_hive": False,
+        "use_gpios": False,
+        "zigbee_button": False,
+        "set_alarm": False,
+    }
 
-    opts = getopt.getopt(sys.argv[1:], "hlgbzt:f:")[0]
+    opts = getopt.getopt(sys.argv[1:], "halgbzt:f:")[0]
 
     for opt, arg in opts:
         # print(opt, arg)
-        if opt == '-h':
+        if opt == "-h":
             print(help_string)
             sys.exit()
-        if opt == '-t':
-            to_station = arg
-        if opt == '-f':
-            from_station = arg
-        if opt == '-l':
-            use_leds = True
-        if opt == '-b':
-            use_hive = True
-        if opt == '-z':
-            zigbee_button = True
-        if opt == '-g':
-            use_gpios = True
+        if opt == "-a":
+            args["set_alarm"] = True
+        if opt == "-t":
+            args["to_station"] = arg
+        if opt == "-f":
+            args["from_station"] = arg
+        if opt == "-l":
+            args["use_leds"] = True
+        if opt == "-b":
+            args["use_hive"] = True
+        if opt == "-z":
+            args["zigbee_button"] = True
+        if opt == "-g":
+            args["use_gpios"] = True
 
-    if not to_station:
+    if not args["to_station"]:
         print("Error: toStation was not specified")
         print(help_string)
         sys.exit()
 
-    if not from_station:
+    if not args["from_station"]:
         print("Error: fromStation was not specified")
         print(help_string)
         sys.exit()
 
-    return (to_station, from_station, use_leds, use_gpios,
-            use_hive, zigbee_button)
+    return args
 
 
 def configure_logger(logger_name, log_path=None):
-    """ Logger configuration function
-        If log_path given then log to console and to the file
-        else to console only.
+    """Logger configuration function
+
+    If log_path given then log to console and to the file
+    else to console only.
     """
     version = 1
     disable_existing_loggers = False
-    formatters = {'default':
-                  {'format': '%(asctime)s,%(levelname)s,%(name)s,%(message)s',
-                             'datefmt': '%Y-%m-%d %H:%M:%S'}
-                  }
+    formatters = {
+        "default": {
+            "format": "%(asctime)s,%(levelname)s,%(name)s,%(message)s",
+            "datefmt": "%Y-%m-%d %H:%M:%S",
+        }
+    }
 
-    console_handler = {'level': 'DEBUG',
-                       'class': 'logging.StreamHandler',
-                       'formatter': 'default',
-                       'stream': 'ext://sys.stdout'}
+    console_handler = {
+        "level": "DEBUG",
+        "class": "logging.StreamHandler",
+        "formatter": "default",
+        "stream": "ext://sys.stdout",
+    }
 
-    file_handler = {'level': 'DEBUG',
-                    'class': 'logging.handlers.RotatingFileHandler',
-                    'formatter': 'default',
-                    'filename': log_path,
-                    'maxBytes': 100000,
-                    'backupCount': 3}
+    file_handler = {
+        "level": "DEBUG",
+        "class": "logging.handlers.RotatingFileHandler",
+        "formatter": "default",
+        "filename": log_path,
+        "maxBytes": 100000,
+        "backupCount": 3,
+    }
 
     if log_path:
-        logging.config.dictConfig({
-            'version': version,
-            'disable_existing_loggers': disable_existing_loggers,
-            'formatters': formatters,
-            'handlers': {'file': file_handler},
-            'loggers': {'': {'level': 'DEBUG', 'handlers': ['file']}}
-        })
+        logging.config.dictConfig(
+            {
+                "version": version,
+                "disable_existing_loggers": disable_existing_loggers,
+                "formatters": formatters,
+                "handlers": {"file": file_handler},
+                "loggers": {"": {"level": "DEBUG", "handlers": ["file"]}},
+            }
+        )
     else:
-        logging.config.dictConfig({
-            'version': version,
-            'disable_existing_loggers': disable_existing_loggers,
-            'formatters': formatters,
-            'handlers': {'console': console_handler},
-            'loggers': {'': {'level': 'DEBUG', 'handlers': ['console']}}
-        })
+        logging.config.dictConfig(
+            {
+                "version": version,
+                "disable_existing_loggers": disable_existing_loggers,
+                "formatters": formatters,
+                "handlers": {"console": console_handler},
+                "loggers": {"": {"level": "DEBUG", "handlers": ["console"]}},
+            }
+        )
 
-    logging.getLogger('requests').setLevel(logging.WARNING)
+    logging.getLogger("requests").setLevel(logging.WARNING)
 
     return logging.getLogger(logger_name)
 
 
 def timestamp_from_time_string(time_string):
-    """ Takes a time_string of the form HH:MM and returns seconds
-    """
+    """Takes a time_string of the form HH:MM and returns seconds"""
     hours, minutes = time_string.split(":")
     seconds = (int(hours) * 60 * 60) + (int(minutes) * 60)
     return seconds
 
 
 def flush_queue(my_queue):
-    """ Flush the give queue
-    """
+    """Flush the given queue"""
     while not my_queue.empty():
         my_queue.get()
 
 
 # Train functions
 def get_station_name(crs_code):
-    """ Get the station name for the given crs code
-    """
+    """Get the station name for the given crs code"""
     station_name = None
     # Get all the crs codes
     resp_status, resp = tt.get_stations()
     if resp_status:
         stations = json.loads(resp.text)
         for station in stations:
-            if crs_code.upper() == station['crsCode']:
-                return station['stationName']
+            if crs_code.upper() == station["crsCode"]:
+                return station["stationName"]
     return station_name
 
 
 def load_debug_delays():
-    """ Load debug delays from a yaml file
-    """
+    """Load debug delays from a yaml file"""
     try:
         fdir = os.path.dirname(os.path.realpath(__file__))
-        filename = os.path.join(fdir, 'test_delays.yaml')
-        with open(filename, 'r', encoding='utf-8') as file:
+        filename = os.path.join(fdir, "test_delays.yaml")
+        with open(filename, "r", encoding="utf-8") as file:
             return yaml.safe_load(file.read())
 
     except FileNotFoundError:
         return None
 
 
-def check_for_delays(to_station, from_station, use_leds,
-                     hive_indication, voice_strings):
-    """ Check for delays and create voice strings for any delays
-    """
+def check_for_delays(args, voice_strings):
+    """Check for delays and create voice strings for any delays"""
 
     # Make sure the events used to stop threads are not set
     CHECK_THREAD_STOP.clear()
 
     # If led indication requested then start the led controller serial port
-    if use_leds:
+    if args["use_leds"]:
         led.start_serial_threads(cfg.LED_PORT, cfg.LED_BAUD)
 
     # If we are using a hive bulb as an indicator then create a data object
     # for the bulb.
-    if hive_indication:
+    if args["hive_indication"]:
         colour_bulb = api.BulbObject(cfg.get_dev(cfg.INDICATOR_BULB))
+
+    # Get a hive account object for controlling the alarm
+    if args["set_alarm"]:
+        alarm = hive_alarm.HiveAlarm()
 
     # Loop and sleep between runs
     while not CHECK_THREAD_STOP.isSet():
@@ -237,42 +253,46 @@ def check_for_delays(to_station, from_station, use_leds,
         # on/off by manipulating that file while this is running.
         delays = load_debug_delays()
         if not delays:
-            delays = tt.get_delays(from_station,
-                                   to_station,
-                                   pretty_print=False)
+            delays = tt.get_delays(
+                args["from_station"], args["to_station"], pretty_print=False
+            )
 
         for delay in delays:
             LOGGER.debug(delay)
 
         # Turn on the LED warning pattern if we have a delay
-        if delays and use_leds:
-            led.show_pattern('CLOCK', led.Colours.RED)
+        if delays and args["use_leds"]:
+            led.show_pattern("CLOCK", led.Colours.RED)
 
         # Turn off the LED warning if we have no delays.
-        if (not delays) and use_leds:
+        if (not delays) and args["use_leds"]:
             led.show_pattern("NO_DELAYS", led.Colours.GREEN_DIM)
 
         # Hive Indication using an RGB bulb
         # Turn on alert if we have a delay
         # Calncel old alerts if no delays or if we exit schedule period
-        if hive_indication:
+        if args["hive_indication"]:
             hive_bulb_checks(delays, colour_bulb)
 
-        # Build voice strings for audio announcements and save them in a file
+        # Build voice strings for audio announcements and save in a file
         # We'll play these if a user presses the zigbee button
-        voice_strings.build_voice_string(delays, from_station, to_station)
+        voice_strings.build_voice_string(
+            delays, args["from_station"], args["to_station"]
+        )
+
+        # Check and set alarm state according to schedule
+        alarm.set_schedule_state()
 
         # Now sleep
         time.sleep(DELAY_CHECK_SLEEP_TIME)
 
 
 def hive_bulb_checks(delays, colour_bulb):
-    """ Turn a bulb on and red if there is a delay, set alert=True
+    """Turn a bulb on and red if there is a delay, set alert=True
 
-        Cancel old alerts:
-            Turn bulb white and off if no delays and alert is still active
-            Turn bulb white and off if schedule=off and alert is still active
-
+    Cancel old alerts:
+        Turn bulb white and off if no delays and alert is still active
+        Turn bulb white and off if schedule=off and alert is still active
     """
     # Turn on the Hive bulb (to red) if we have a delay and the schedule
     # allows indications
@@ -295,48 +315,48 @@ def hive_bulb_checks(delays, colour_bulb):
     # still showing an alert
     if not cfg.schedule_check(sched) and colour_bulb.alert_active:
         if colour_bulb.is_red():
-            LOGGER.debug("Schedule is off, "
-                         "bulb is indicating delays so we turn it off")
+            LOGGER.debug(
+                "Schedule is off, " "bulb is indicating delays so we turn it off"
+            )
             colour_bulb.set_white_off()
             if not colour_bulb.is_red():
                 colour_bulb.alert_active = False
 
 
 def button_press(cmd, sitt_group, freezer_sensor, voice_strings):
-    """ Take actions based on the button press type:
+    """Take actions based on the button press type:
 
-        Short press:  Toggle lights on/off
+    Short press:  Toggle lights on/off
 
-        Double press: Bulb=red, play delay announcements,
-                      return bulb to original state
+    Double press: Bulb=red, play delay announcements,
+                    return bulb to original state
 
-        Long press:   Play water level annoucement,
-                      If bulb_green or bulb_blue then Bulb=white,
-                      toggle freezer alarm enable/disable
-                      Leave bulb white - part of disable
-
+    Long press:   Play water level annoucement,
+                    If bulb_green or bulb_blue then Bulb=white,
+                    toggle freezer alarm enable/disable
+                    Leave bulb white - part of disable
     """
     # short press: Toggle the sitting room group all on or all off
-    if cmd['msgCode'] == "04":
+    if cmd["msgCode"] == "04":
         LOGGER.debug("Button Short Press: Toggling lights")
         sitt_group.toggle()
 
     # double press or long press
-    elif cmd['msgCode'] in ["08", "10"]:
+    elif cmd["msgCode"] in ["08", "10"]:
 
         # Play train notifications
-        if cmd['msgCode'] == '08':
+        if cmd["msgCode"] == "08":
             LOGGER.debug("Button Double Press: Playing voice strings")
             voice_strings.play()
             # play_voice_strings([voice_strings])
 
         # Play hot water level and toggle the freezer alarm setting
-        elif cmd['msgCode'] == '10':
+        elif cmd["msgCode"] == "10":
             LOGGER.debug("Button Long Press: Playing msg")
 
-            uwl = udp_cli.send_cmd(udp_cli.UWL_MESSAGE,
-                                   udp_cli.UWL_RESP,
-                                   udp_cli.ADDRESS)
+            uwl = udp_cli.send_cmd(
+                udp_cli.UWL_MESSAGE, udp_cli.UWL_RESP, udp_cli.ADDRESS
+            )
 
             hw_msg = f"Hot water is at {uwl}"
 
@@ -347,9 +367,8 @@ def button_press(cmd, sitt_group, freezer_sensor, voice_strings):
 
 
 def doorbell_press(colour_bulb):
-    """ Action on doorbell press:
-
-        Play doorbell sound and breifly turn bulb on/red.
+    """Action on doorbell press:
+    Play doorbell sound and briefly turn bulb on/red.
     """
     # For any bell press change indicator bulb red and play the bell sound
     cmd = f"aplay {cfg.BELL_SOUND} &"
@@ -365,9 +384,8 @@ def doorbell_press(colour_bulb):
 
 
 def button_press_handler(button_press_queue, hive_indication, voice_strings):
-    """ Check for button press events on the queue and action as appropriate
-        See code for details of actions
-
+    """Check for button press events on the queue and action as appropriate
+    See code for details of actions
     """
     # If we are using a hive bulb as an indicator then create a data object
     # for the bulb.
@@ -390,7 +408,7 @@ def button_press_handler(button_press_queue, hive_indication, voice_strings):
             # shortPress  = play latest train delay annoucement audio clip
             # doublePress = play annoucement and briefly change bulb colour
             # longPress   = play 'robodad' annoucement
-            if cmd['nodeId'] == cfg.BUTTON_NODE_ID:
+            if cmd["nodeId"] == cfg.BUTTON_NODE_ID:
                 button_press(cmd, sitt_group, freezer_sensor, voice_strings)
 
             # Handle doorbell button press
@@ -419,13 +437,12 @@ def button_press_handler(button_press_queue, hive_indication, voice_strings):
             # REPORTATTR:2F28,06,0402,0000,29,08E3
             regex = "REPORTATTR:[0-9a-fA-F]{4},06,0402,0000,29"
             if re.match(regex, msg):
-                node_id = msg.split(':')[1][:4]
+                node_id = msg.split(":")[1][:4]
                 temperature = msg.split(",")[-1]
                 temperature = hex_temp.convert_s16(temperature) / 100
                 freezer_sensor.update_temperature(temperature)
 
-                LOGGER.debug("TEMPERATURE, %s, %s",
-                             node_id, freezer_sensor.temp)
+                LOGGER.debug("TEMPERATURE, %s, %s", node_id, freezer_sensor.temp)
 
             # CHECKIN:2F28,06,00
             regex = "CHECKIN:[0-9a-fA-F]{4},06"
@@ -442,23 +459,23 @@ def button_press_handler(button_press_queue, hive_indication, voice_strings):
         time.sleep(0.1)
 
 
-class Voice():
-    """ Class for creating and playing voice announcements """
+class Voice:
+    """Class for creating and playing voice announcements"""
+
     def __init__(self):
         self.strings = []
 
     def build_voice_string(self, delays, from_station, to_station):
-        """ Build the voice strings
-        """
+        """Build the voice strings"""
         self.strings = []
         for delay in delays:
-            to_station = get_station_name(delay['to'])
-            from_station = get_station_name(delay['from'])
+            to_station = get_station_name(delay["to"])
+            from_station = get_station_name(delay["from"])
 
             try:
-                etd = timestamp_from_time_string(delay['etd'])
-                std = timestamp_from_time_string(delay['std'])
-                delay_time = int((etd-std)/60)
+                etd = timestamp_from_time_string(delay["etd"])
+                std = timestamp_from_time_string(delay["std"])
+                delay_time = int((etd - std) / 60)
             # ValueError can occur if there's no colon in the time HH:MM
             # AttributeError occurs if any vars are None
             except (ValueError, AttributeError):
@@ -469,8 +486,8 @@ class Voice():
                 f"The {delay['std']} from {from_station} to {to_station}, is "
             )
 
-            if delay['isCancelled']:
-                if delay['cancelReason']:
+            if delay["isCancelled"]:
+                if delay["cancelReason"]:
                     voice_string += f"cancelled. {delay['cancelReason']}."
                 else:
                     voice_string += "cancelled."
@@ -479,7 +496,7 @@ class Voice():
                 if delay_time:
                     voice_string += f" by {delay_time} minutes."
 
-                if delay['delayReason']:
+                if delay["delayReason"]:
                     voice_string += f". {delay['delayReason']}."
 
             self.strings.append(voice_string)
@@ -487,50 +504,49 @@ class Voice():
         # Null voice string for no-delays situation
         if not delays:
             voice_string = "No delays listed for trains from {} to {}."
-            self.strings.append(voice_string.format(
-                get_station_name(from_station),
-                get_station_name(to_station)))
+            self.strings.append(
+                voice_string.format(
+                    get_station_name(from_station), get_station_name(to_station)
+                )
+            )
 
     def play(self, msg=None):
-        """ Play the given voice strings
-        """
+        """Play the given voice strings"""
 
         voice_strings = msg if msg else self.strings
-        voice_string = '. '.join(voice_strings) + '.'
+        voice_string = ". ".join(voice_strings) + "."
 
         LOGGER.debug(voice_string)
         # Form the complete command
-        temp_voice_file = '/tmp/voicefile.wav'
-        cmd = 'pico2wave -l en-GB -w {tvf} "{vs}" && aplay {tvf} &'.format(
-            tvf=temp_voice_file, vs=voice_string)
+        temp_voice_file = "/tmp/voicefile.wav"
+        cmd = "pico2wave -l en-GB -w {tvf} '{vs}' && aplay {tvf} &".format(
+            tvf=temp_voice_file, vs=voice_string
+        )
 
-        my_pipe = os.popen(cmd, 'w')
+        my_pipe = os.popen(cmd, "w")
         my_pipe.close()
 
 
 def check_usb_dongles():
-    """ Check we have the symlinks to the correct USB devices
-        in /dev.  See config.py for instaructions on how to set
-        these up using udevadm.
-
+    """Check we have symlinks to correct USB devices in /dev.
+    See config.py for instaructions on how to set these up using udevadm.
     """
     dongles = [cfg.HIVE_ZB_PORT, cfg.ZB_PORT]
 
     for dongle in dongles:
         if not os.path.exists(dongle):
-            msg = ('Dongle port {dongle} does not exist. See config.py '
-                   'for instructions on how to configure')
+            msg = (
+                "Dongle port {dongle} does not exist. See config.py "
+                "for instructions on how to configure"
+            )
             LOGGER.error(msg)
             return False
     return True
 
 
 def start_thread(thread_func, args, thread_name, thread_pool):
-    """ Start the thread and return it
-    """
-    thread = threading.Thread(
-        target=thread_func,
-        args=args)
+    """Start the thread and return it"""
+    thread = threading.Thread(target=thread_func, args=args)
     thread.daemon = True
     thread.start()
     thread.name = thread_name
@@ -539,60 +555,64 @@ def start_thread(thread_func, args, thread_name, thread_pool):
 
 
 def main():
-    """ Main program
-    """
+    """Main program"""
 
     # First check the ZigBee USB dongles are mapped to symlinks in /dev
     if not check_usb_dongles():
         sys.exit()
 
-    to_station, from_station, leds, gpio, hive, zigbee = get_args()
+    args = get_args()
     thread_pool = []
 
     voice_strings = Voice()
 
     # Start the Hive Zigbee thread
-    if hive:
-        at_threads = at.start_serial_threads(port=cfg.HIVE_ZB_PORT,
-                                             baud=cfg.ZB_BAUD,
-                                             print_status=False,
-                                             rx_q=True,
-                                             listener_q=True)
+    if args["hive"]:
+        at_threads = at.start_serial_threads(
+            port=cfg.HIVE_ZB_PORT,
+            baud=cfg.ZB_BAUD,
+            print_status=False,
+            rx_q=True,
+            listener_q=True,
+        )
 
-        at_threads[0].name = 'Hive Zigbee - read thread'
-        at_threads[1].name = 'Hive Zigbee - write thread'
+        at_threads[0].name = "Hive Zigbee - read thread"
+        at_threads[1].name = "Hive Zigbee - write thread"
         thread_pool = thread_pool + at_threads
 
     # Start ZigBee button press listener thread and button_press_handler queue
     # If button press then listener puts event on the ButtonPressQueue
     # button_press_handler takes events from the queue and processes them
-    if zigbee:
+    if args["zigbee"]:
         button_press_queue = queue.Queue()
 
         # Start the button press listener
-        start_thread(bl.main,
-                     (cfg.ZB_PORT, cfg.ZB_BAUD, button_press_queue),
-                     'Button Listener',
-                     thread_pool)
+        start_thread(
+            bl.main,
+            (cfg.ZB_PORT, cfg.ZB_BAUD, button_press_queue),
+            "Button Listener",
+            thread_pool,
+        )
 
         # Start the button press handler
-        start_thread(button_press_handler,
-                     (button_press_queue, hive, voice_strings),
-                     'Button Handler',
-                     thread_pool)
+        start_thread(
+            button_press_handler,
+            (button_press_queue, args["hive"], voice_strings),
+            "Button Handler",
+            thread_pool,
+        )
 
-    if gpio:
-        start_thread(gm.main,
-                     (voice_strings),
-                     'GPIO Monitor',
-                     thread_pool)
+    if args["gpio"]:
+        start_thread(gm.main, (voice_strings), "GPIO Monitor", thread_pool)
 
     # Start delay checker thread
     # Check for delays, build any voice strings and set led patterns
-    start_thread(check_for_delays,
-                 (to_station, from_station, leds, hive, voice_strings),
-                 'Delay checker',
-                 thread_pool)
+    start_thread(
+        check_for_delays,
+        (args, voice_strings),
+        "Delay checker",
+        thread_pool,
+    )
 
     # Check the threads are all still running
     while True:

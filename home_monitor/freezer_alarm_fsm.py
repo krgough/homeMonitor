@@ -3,8 +3,6 @@ Created on 21 Feb 2021
 
 @author: keithgough
 
-TODO: Deal with red light conflict - Is there one?
-
 """
 import time
 import logging
@@ -19,60 +17,59 @@ DAY = [("00:01", "23:59")]
 
 # pylint: disable=too-few-public-methods
 class Sensor:
-    """ Test Sensor """
+    """Test Sensor"""
     def __init__(self):
         self.last_report = time.time()
         self.temp_high = False
         self.long_press_received = False
 
     def online(self):
-        """ Sensor online check """
+        """Sensor online check"""
         return time.time() - self.last_report < cfg.SENSOR_OFFLINE_TIME
 
 
 class Bulb:
-    """ Test Bulb """
+    """Test Bulb"""
     def __init__(self):
         self.colour = 'white'
         self.bulb_on = True
 
     def is_white_off(self):
-        """ thing """
+        """Check if bulb is white and off"""
         return self.colour == 'white' and not self.bulb_on
 
     def is_white(self):
-        """ thing """
+        """Check if bulb is white"""
         return self.colour == 'white'
 
     def is_green(self):
-        """ thing """
+        """Check if bulb is green"""
         return self.colour == 'green'
 
     def is_blue(self):
-        """ thing """
+        """Check if bulb is blue"""
         return self.colour == 'blue'
 
     def set_blue(self):
-        """ thing """
+        """Set bulb colour to blue"""
         self.colour = 'blue'
 
     def set_green(self):
-        """ thing """
+        """Set bulb colour to green"""
         self.colour = 'green'
 
     def set_white(self):
-        """ thing """
+        """Set bulb to white"""
         self.colour = 'white'
 
     def set_white_off(self):
-        """ thing """
+        """Set bulb to white and off"""
         self.colour = 'white'
         self.bulb_on = False
 
 
 class State:
-    """
-    We define a state object which provides some utility functions for the
+    """State object which provides some utility functions for the
     individual states within the state machine.
     """
 
@@ -82,21 +79,21 @@ class State:
         LOGGER.debug('Entering state: %s', str(self))
 
     def on_event(self):
-        """ Handle events that are delegated to this State. """
+        """Handle events that are delegated to this State."""
 
     def __repr__(self):
-        """ Usess the __str__ method to describe the State. """
+        """Usess the __str__ method to describe the State."""
         return self.__str__()
 
     def __str__(self):
-        """ Returns the name of the State. """
+        """Returns the name of the State."""
         return self.__class__.__name__
 
 
 class TempNormal(State):
-    """ Temperature is normal """
+    """Temperature is normal"""
     def on_event(self):
-        """ Handle the events """
+        """Handle the events"""
         # We should recieve temperature reports every 5mins
 
         # If no recent reports then transition to state=SensorOffline
@@ -115,10 +112,10 @@ class TempNormal(State):
 
 
 class TempHigh(State):
-    """ Temperature is too high.
-        Show a blue light and wait for a long button
-        press to acknowledge the error state
+    """Temperature is too high.
 
+    Show a blue light and wait for a long button
+    press to acknowledge the error state
     """
     def __init__(self, bulb, sensor):
         super().__init__(bulb, sensor)
@@ -135,11 +132,10 @@ class TempHigh(State):
 
 
 class Disabled(State):
-    """ We wait in disabled until the temperarture
-        drops to normal then we re-enble by jumping
-        to state=TempNormal
+    """We wait in disabled until the temperarture drops to normal
 
-        We use 1'C hysteresis from threshold to reset
+    Then we re-enble by jumping to state=TempNormal
+    We use 1'C hysteresis from threshold to reset
     """
     def on_event(self):
         if self.sensor.online() and not self.sensor.temp_high:
@@ -149,8 +145,8 @@ class Disabled(State):
 
 
 class OfflineDay(State):
-    """ Show a green light (Unless it's the middle of the night)
-        Exit if long button press or if sensor comes back online
+    """Show a green light (Unless it's the middle of the night)
+    Exit if long button press or if sensor comes back online
     """
     def __init__(self, bulb, sensor):
         super().__init__(bulb, sensor)
@@ -184,7 +180,7 @@ class OfflineDay(State):
 
 class OfflineNight(State):
     """ Show a green light (Unless it's the middle of the night)
-        Exit if long button press or if sensor comes back online
+    Exit if long button press or if sensor comes back online
     """
     def __init__(self, bulb, sensor):
         super().__init__(bulb, sensor)
@@ -211,22 +207,20 @@ class OfflineNight(State):
 
 
 class SensorStateMachine:
-    """ A simple state machine
-    """
+    """A simple state machine"""
 
     def __init__(self, bulb, sensor):
-        """ Initialize the components.
-
-        """
+        """Initialize the components."""
         self.bulb = bulb
         self.sensor = sensor
         # Start with a default state.
         self.state = TempNormal(bulb, sensor)
 
     def on_event(self):
-        """  This is the state machine handler.  If the conditions
-             for exiting a state are met then we return the new
-             state class.
+        """This is the state machine handler.
+
+        If the conditions for exiting a state are met then we return the new
+        state class.
         """
         # The next state will be the result of the on_event function.
         next_state = self.state.on_event()
@@ -240,39 +234,39 @@ class SensorStateMachine:
 
 
 def temp_high_event(sensor):
-    """ Test event """
+    """Test event"""
     LOGGER.debug("Setting temp high")
     sensor.temp_high = True
 
 
 def temp_low_event(sensor):
-    """ Test event """
+    """Test event"""
     LOGGER.debug("Setting temperature low")
     sensor.temp_high = False
     sensor.last_report = time.time()
 
 
 def temp_normal_event(sensor):
-    """ Test event """
+    """Test event"""
     LOGGER.debug("Setting temp low")
     sensor.temp_high = False
     sensor.last_report = time.time()
 
 
 def long_press_event(sensor):
-    """ Test event """
+    """Test event"""
     LOGGER.debug("Settinglong_press")
     sensor.long_press_received = True
 
 
 def sensor_offline_event(sensor):
-    """ Test event """
+    """Test event"""
     LOGGER.debug("Setting last_report to very old")
     sensor.last_report = 0
 
 
 def sensor_online_event(sensor):
-    """ Test event """
+    """Test event"""
     LOGGER.debug("Setting last_report to very new")
     sensor.last_report = time.time()
 
@@ -285,7 +279,7 @@ def sensor_online_event(sensor):
 
 
 def test1(ssm, sensor, bulb):
-    """ TEMP_NORMAL > OFFLINE_NIGHT > TEMP_NORMAL """
+    """TEMP_NORMAL > OFFLINE_NIGHT > TEMP_NORMAL"""
     cfg.FREEZER_SENSOR_OFFLINE_SCHEDULE = NIGHT
     bulb.bulb_on = False
     bulb.colour = 'white'
@@ -304,7 +298,7 @@ def test1(ssm, sensor, bulb):
 
 
 def test2(ssm, sensor, bulb):
-    """ TEMP_NORMAL > OFFLINE_DAY > OFFLINE_NIGHT > DISABLED > TEMP_NORMAL """
+    """TEMP_NORMAL > OFFLINE_DAY > OFFLINE_NIGHT > DISABLED > TEMP_NORMAL"""
     cfg.FREEZER_SENSOR_OFFLINE_SCHEDULE = DAY
     sensor_offline_event(sensor)
     ssm.on_event()
@@ -334,7 +328,7 @@ def test2(ssm, sensor, bulb):
 
 
 def test3(ssm, sensor, bulb):
-    """ TEMP_NORMAL > OFFLINE_NIGHT > OFFLINE_DAY > DISARMED > TEMP_NORMAL """
+    """TEMP_NORMAL > OFFLINE_NIGHT > OFFLINE_DAY > DISARMED > TEMP_NORMAL"""
     cfg.FREEZER_SENSOR_OFFLINE_SCHEDULE = NIGHT
     sensor_offline_event(sensor)
     ssm.on_event()
@@ -364,7 +358,7 @@ def test3(ssm, sensor, bulb):
 
 
 def test4(ssm, sensor, bulb):
-    """ TEMP_NORMAL > OFFLINE_DAY > TEMP_NORMAL """
+    """TEMP_NORMAL > OFFLINE_DAY > TEMP_NORMAL"""
     cfg.FREEZER_SENSOR_OFFLINE_SCHEDULE = DAY
     sensor_offline_event(sensor)
     ssm.on_event()
@@ -382,7 +376,7 @@ def test4(ssm, sensor, bulb):
 
 
 def test5(ssm, sensor, bulb):
-    """ TEMP_NORMAL > TEMP_HIGH > DISARMED > TEMP_NORMAL """
+    """TEMP_NORMAL > TEMP_HIGH > DISARMED > TEMP_NORMAL"""
     temp_high_event(sensor)
     ssm.on_event()
     assert str(ssm.state) == 'TempHigh'
@@ -406,14 +400,13 @@ def test5(ssm, sensor, bulb):
 
 
 def tests():
-    """ Some test calls - To try and test all possible transitions
+    """Some test calls - To try and test all possible transitions
 
     TEST1 - TEMP_NORMAL > OFFLINE_NIGHT > TEMP_NORMAL
     TEST2 - TEMP_NORMAL > OFFLINE_DAY > OFFLINE_NIGHT > DISARMED > TEMP_NORMAL
     TEST3 - TEMP_NORMAL > OFFLINE_NIGHT > OFFLINE_DAY > DISARMED > TEMP_NORMAL
     TEST4 - TEMP_NORMAL > OFFLINE_DAY > TEMP_NORMAL
     TEST5 - TEMP_NORMAL > TEMP_HIGH > DISARMED > TEMP_NORMAL
-
     """
     sensor = Sensor()
     bulb = Bulb()
