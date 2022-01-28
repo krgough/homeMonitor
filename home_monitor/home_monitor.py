@@ -176,7 +176,7 @@ def configure_logger(logger_name, log_path=None):
         )
 
     logging.getLogger("requests").setLevel(logging.WARNING)
-    logging.getLogger("boto3").setLevel(logging.WARNING)
+    logging.getLogger("botocore").setLevel(logging.WARNING)
 
     return logging.getLogger(logger_name)
 
