@@ -102,7 +102,7 @@ class TokenError(Exception):
 class CogManager:
     """Class to manage Hive Cognito Authorisation"""
 
-    def __init__(self, auth_data) -> None:
+    def __init__(self, auth_data, initial_auth) -> None:
 
         self.tokens = {
             "IdToken": None,
@@ -114,8 +114,12 @@ class CogManager:
         self.get_login_properties()
         self.srp = srp.AWSSRP(**self.auth_data)
 
-        # Load tokens from a file.  Warn user if no file found
-        self.load_tokens()
+        if initial_auth:
+            # Do the 2FA dance with auth sent to phone
+            self.initial_auth()
+        else:
+            # Load tokens from a file.  Warn user if no file found
+            self.load_tokens()
 
     def get_login_properties(self):
         """Call the Hive SSO endpoint to get the properties
@@ -209,11 +213,11 @@ class CogManager:
 class Account:
     """Class to manage Hive Account"""
 
-    def __init__(self, auth_data=None) -> None:
+    def __init__(self, auth_data=None, initial_auth=False) -> None:
         if not auth_data:
-            self.cog = CogManager(AUTH_DATA)
+            self.cog = CogManager(AUTH_DATA, initial_auth)
         else:
-            self.cog = CogManager(auth_data)
+            self.cog = CogManager(auth_data, initial_auth)
         self.user = None
         self.devices = []
         self.products = []
