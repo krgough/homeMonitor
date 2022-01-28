@@ -95,6 +95,7 @@ HOME_FIELDS = {
 class ApiError(Exception):
     """Error from Hive API"""
 
+
 class TokenError(Exception):
     """Error with api tokens"""
 
