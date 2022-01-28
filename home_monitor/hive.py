@@ -95,6 +95,9 @@ HOME_FIELDS = {
 class ApiError(Exception):
     """Error from Hive API"""
 
+class TokenError(Exception):
+    """Error with api tokens"""
+
 
 class CogManager:
     """Class to manage Hive Cognito Authorisation"""
@@ -185,8 +188,10 @@ class CogManager:
     def load_tokens(self, filename=TOKEN_FILE) -> None:
         """Load tokens from the token file"""
         if not os.path.exists(filename):
-            print("\nNo token file.  Need to authenticate with 2FA.")
-            self.initial_auth()
+            LOGGER.error("No token file.  Need to authenticate with 2FA.")
+            LOGGER.error("Run hive.py manually to generate tokens")
+            # self.initial_auth()
+            raise TokenError("No token file")
 
         with open(filename, mode="r", encoding="utf-8") as file:
             self.set_tokens(json.load(file))
