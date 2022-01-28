@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Change to this directory
+cd "$(dirname "$0")"
+
 # Load the environment vars from .profile
 # This is required for cron jobs to work
 source $HOME/.profile
@@ -16,6 +19,6 @@ if [ $? == 0 ]; then
   echo "home_monitor.py is already running"
 else
   echo "Starting home_monitor.py"
-  /usr/bin/env python3 /home/pi/repositories/homeMonitor/home_monitor/home_monitor.py -f $FROM_STATION -t $TO_STATION -zba &
+  /home/pi/.pyenv/versions/3.9.7/bin/python3 /home/pi/repositories/homeMonitor/home_monitor/home_monitor.py -f $FROM_STATION -t $TO_STATION -zba &
   eval "$cmd"
 fi
