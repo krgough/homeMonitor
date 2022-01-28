@@ -514,8 +514,8 @@ def main():
     initial_auth = False
     inp = ("Do you want to create new tokens y/n: ")
     if inp.upper == "Y":
-        inital_auth = True
-    acct = Account(AUTH_DATA, initial_auth=inital_auth)
+        initial_auth = True
+    acct = Account(AUTH_DATA, initial_auth=initial_auth)
     print(acct)
 
     # test_get_set_state(acct)
