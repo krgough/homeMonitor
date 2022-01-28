@@ -5,6 +5,10 @@ Hive Alarm Class
 
 Class object to handle setting the alarm state according to a schedule
 
+We save the sched_state as a variable and we check on each iteration
+if the schedule state should change.  If it does then we send the
+relevant state change command to Hive.  We don't check if it works. 
+
 """
 import logging
 
@@ -19,21 +23,24 @@ class HiveAlarm():
     def __init__(self) -> None:
         self.acct = hive.Account(hive.AUTH_DATA)
         self.home_id = self.acct.homes[0]["id"]
-        self.state = self.acct.get_alarm_state(self.home_id)
+        self.state = self.acct.get_alarm_state(self.acct.homes[0]["id"])
 
     def set_schedule_state(self):
         """Set alarm state according to the schedule"""
-        self.state = self.acct.get_alarm_state(self.home_id)
+        new_state = cfg.schedule_check(cfg.HIVE_ALARM_ON_SCHEDULE)
 
-        # If sched is on and alarm is off the arm the system
-        if cfg.schedule_check(cfg.HIVE_ALARM_ON_SCHEDULE) and self.state == "home":
-            self.acct.set_alarm_state(home_id=self.home_id, alarm_state="away")
+        # If existing state does not match new_stae then we need to change state
+        if self.state != new_state:
 
-        if not cfg.schedule_check(cfg.HIVE_ALARM_ON_SCHEDULE) and self.state == 'away':
-            self.acct.set_alarm_state(self.acct.homes[0]["id"], alarm_state='home')
+            if new_state:
+                self.acct.set_alarm_state(home_id=self.home_id, alarm_state="away")
+                LOGGER.info("ARMING Hive Alarm")
+            else:
+                self.acct.set_alarm_state(self.acct.homes[0]["id"], alarm_state='home')
+                LOGGER.info("DISARMING Hive Alarm")
 
-        self.state = self.acct.get_alarm_state(self.home_id)
-        return self.state
+        self.state = new_state
+        return
 
     def __str__(self):
         """Return the acct object as a string"""
@@ -44,3 +51,5 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
     alarm = HiveAlarm()
     LOGGER.debug(alarm)
+    alarm.set_schedule_state()
+
