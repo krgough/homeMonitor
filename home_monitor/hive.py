@@ -512,8 +512,8 @@ def main():
     # cog_mgr.initial_auth()
 
     initial_auth = False
-    inp = ("Do you want to create new tokens y/n: ")
-    if inp.upper == "Y":
+    inp = input("Do you want to create new tokens y/n: ")
+    if inp.upper() == "Y":
         initial_auth = True
     acct = Account(AUTH_DATA, initial_auth=initial_auth)
     print(acct)

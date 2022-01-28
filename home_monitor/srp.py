@@ -111,7 +111,7 @@ def pad_hex(long_int):
         hash_str = f"0{hash_str}"
     elif hash_str[0] in '89ABCDEFabcdef':
         # hash_str = '00%s' % hash_str
-        hash_str = "00{hash_str}"
+        hash_str = f"00{hash_str}"
     return hash_str
 
 
