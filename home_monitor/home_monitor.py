@@ -231,7 +231,7 @@ def check_for_delays(args, voice_strings):
 
     # If we are using a hive bulb as an indicator then create a data object
     # for the bulb.
-    if args["hive_indication"]:
+    if args["use_hive"]:
         colour_bulb = api.BulbObject(cfg.get_dev(cfg.INDICATOR_BULB))
 
     # Get a hive account object for controlling the alarm
@@ -567,7 +567,7 @@ def main():
     voice_strings = Voice()
 
     # Start the Hive Zigbee thread
-    if args["hive"]:
+    if args["use_hive"]:
         at_threads = at.start_serial_threads(
             port=cfg.HIVE_ZB_PORT,
             baud=cfg.ZB_BAUD,
@@ -583,7 +583,7 @@ def main():
     # Start ZigBee button press listener thread and button_press_handler queue
     # If button press then listener puts event on the ButtonPressQueue
     # button_press_handler takes events from the queue and processes them
-    if args["zigbee"]:
+    if args["zigbee_button"]:
         button_press_queue = queue.Queue()
 
         # Start the button press listener
@@ -602,7 +602,7 @@ def main():
             thread_pool,
         )
 
-    if args["gpio"]:
+    if args["use_gpios"]:
         start_thread(gm.main, (voice_strings), "GPIO Monitor", thread_pool)
 
     # Start delay checker thread
@@ -617,7 +617,7 @@ def main():
     # Check the threads are all still running
     while True:
         for thd in thread_pool:
-            if not thd.isAlive():
+            if not thd.is_alive():
                 LOGGER.debug("ERROR: THREAD HAS STOPPED: %s", thd.name)
                 LOGGER.debug("Exiting program to allow clean restart")
                 sys.exit()
