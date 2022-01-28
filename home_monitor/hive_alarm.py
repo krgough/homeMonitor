@@ -7,7 +7,7 @@ Class object to handle setting the alarm state according to a schedule
 
 We save the sched_state as a variable and we check on each iteration
 if the schedule state should change.  If it does then we send the
-relevant state change command to Hive.  We don't check if it works. 
+relevant state change command to Hive.  We don't check if it works.
 
 """
 import logging
@@ -23,7 +23,11 @@ class HiveAlarm():
     def __init__(self) -> None:
         self.acct = hive.Account(hive.AUTH_DATA)
         self.home_id = self.acct.homes[0]["id"]
-        self.state = self.acct.get_alarm_state(self.acct.homes[0]["id"])
+
+        if self.acct.get_alarm_state(self.acct.homes[0]["id"]) == 'away':
+            self.state = True
+        else:
+            self.state = False
 
     def set_schedule_state(self):
         """Set alarm state according to the schedule"""
@@ -40,7 +44,6 @@ class HiveAlarm():
                 LOGGER.info("DISARMING Hive Alarm")
 
         self.state = new_state
-        return
 
     def __str__(self):
         """Return the acct object as a string"""
@@ -52,4 +55,3 @@ if __name__ == "__main__":
     alarm = HiveAlarm()
     LOGGER.debug(alarm)
     alarm.set_schedule_state()
-

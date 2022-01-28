@@ -177,7 +177,7 @@ class CogManager:
         LOGGER.info("Refreshing authorisation...")
         tokens = self.srp.refresh(self.tokens["RefreshToken"])
         self.set_tokens(tokens["AuthenticationResult"])
-        LOGGER.info(tokens)
+        LOGGER.debug(tokens)
         # self.save_tokens()
 
     def set_tokens(self, tokens):
