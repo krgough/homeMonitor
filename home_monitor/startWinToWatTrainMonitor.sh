@@ -1,11 +1,10 @@
 #!/bin/bash
 
-# Change to this directory
+# Change to this directory so we can find .tokens.json
 cd "$(dirname "$0")"
 
-# Load the environment vars from .profile
-# This is required for cron jobs to work
-source $HOME/.profile
+# Add path to pyenv shims and bin so root can run python
+export PATH=/home/pi/.pyenv/shims:/home/pi/.pyenv/bin:"$PATH"
 
 TO_STATION="wat"
 FROM_STATION="win"
@@ -19,6 +18,6 @@ if [ $? == 0 ]; then
   echo "home_monitor.py is already running"
 else
   echo "Starting home_monitor.py"
-  /home/pi/.pyenv/versions/3.9.7/bin/python3 /home/pi/repositories/homeMonitor/home_monitor/home_monitor.py -f $FROM_STATION -t $TO_STATION -zba &
+  /home/pi/repositories/homeMonitor/home_monitor/home_monitor.py -f $FROM_STATION -t $TO_STATION -zba &
   eval "$cmd"
 fi
