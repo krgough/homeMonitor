@@ -16,6 +16,6 @@ if [ $? == 0 ]; then
   echo "home_monitor.py is already running"
 else
   echo "Starting home_monitor.py"
-  /usr/bin/python3 /home/pi/repositories/homeMonitor/home_monitor/home_monitor.py -f $FROM_STATION -t $TO_STATION -zba &
+  /usr/bin/env python3 /home/pi/repositories/homeMonitor/home_monitor/home_monitor.py -f $FROM_STATION -t $TO_STATION -zba &
   eval "$cmd"
 fi

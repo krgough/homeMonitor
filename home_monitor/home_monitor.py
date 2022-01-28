@@ -271,7 +271,7 @@ def check_for_delays(args, voice_strings):
         # Hive Indication using an RGB bulb
         # Turn on alert if we have a delay
         # Calncel old alerts if no delays or if we exit schedule period
-        if args["hive_indication"]:
+        if args["use_hive"]:
             hive_bulb_checks(delays, colour_bulb)
 
         # Build voice strings for audio announcements and save in a file
@@ -597,7 +597,7 @@ def main():
         # Start the button press handler
         start_thread(
             button_press_handler,
-            (button_press_queue, args["hive"], voice_strings),
+            (button_press_queue, args["use_hive"], voice_strings),
             "Button Handler",
             thread_pool,
         )

@@ -3,3 +3,6 @@ pyserial
 /home/pi/repositories/zigbeetools/dist/zigbeetools-1.0.0.tar.gz
 pytz
 RPi.GPIO
+boto3
+pyquery
+tabulate
