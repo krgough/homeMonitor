@@ -86,6 +86,10 @@ We have several module that can be used as follows:
 export NATIONAL_RAIL_TOKEN='token-here-keep-quotes'
 # KG: Token for pathname to token.file for hive api calls.
 export HIVE_API_PATH='/home/pi/repositories/apiLogger/'
+# KG: Hive Access
+export HIVE_USERNAME=<hive-username>
+export HIVE_PASSWORD=<hive-password>
+
 ```
 
 ### Hot Water RPI Setup
