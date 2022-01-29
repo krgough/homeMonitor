@@ -229,7 +229,7 @@ class BulbObject(OnOffObject):
                 }
 
         # If any of the above fail then return None
-        fails = ", ".join([item[0] for item in resp.items() if not item[1]])
+        fails = ", ".join([item[0] for item in resp.items() if item[1] is None])
         if fails:
             LOGGER.error("Error getting %s", fails)
             return None
