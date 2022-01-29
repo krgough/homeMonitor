@@ -1,4 +1,4 @@
-# homeMonitor
+# homeMonitor - stuff
 
 Uses ZigBee USB devices running AT command firmware to monitor and control ZigBee devices in the home. We have a speaker attached to the rPi audio port so that we can use a text to speech to read out train delay and other information.
 
