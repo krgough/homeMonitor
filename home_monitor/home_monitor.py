@@ -139,7 +139,7 @@ def configure_logger(logger_name, log_path=None):
     }
 
     console_handler = {
-        "level": "INFO",
+        "level": "DEBUG",
         "class": "logging.StreamHandler",
         "formatter": "default",
         "stream": "ext://sys.stdout",
