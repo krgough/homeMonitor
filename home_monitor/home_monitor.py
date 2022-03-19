@@ -161,7 +161,13 @@ def configure_logger(logger_name, log_path=None):
                 "disable_existing_loggers": disable_existing_loggers,
                 "formatters": formatters,
                 "handlers": {"file": file_handler},
-                "loggers": {"": {"level": "DEBUG", "handlers": ["file"]}},
+                "loggers": {
+                    "": {"level": "DEBUG", "handlers": ["file"]},
+                    "requests.packages.urllib3": {
+                        "handlers": ["file"],
+                        "level": logging.WARNING
+                    }
+                },
             }
         )
     else:
