@@ -500,7 +500,7 @@ class SensorObject:
             cfg_rep = ("at+cfgrpt:{node_id},06,0,0402,0,0000,29,"
                        "0001,{report_interval},0001")
 
-            LOGGER.debug("Resetting temperature attribute report config")
+            LOGGER.warning("Resetting temperature attribute report config")
             at.TX_QUEUE.put(
                 bind_msg.format(
                     node_id=node_id,

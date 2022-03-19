@@ -303,7 +303,7 @@ def hive_bulb_checks(delays, colour_bulb):
     # allows indications
     sched = cfg.TRAIN_DELAY_INDICATION_SCHEDULE
     if delays and cfg.schedule_check(sched) and (not colour_bulb.alert_active):
-        LOGGER.debug("Turn indicator bulb on.  Delays found & schedule is on")
+        LOGGER.info("Turn indicator bulb on.  Delays found & schedule is on")
         colour_bulb.set_red()
         colour_bulb.alert_active = True
 
@@ -311,7 +311,7 @@ def hive_bulb_checks(delays, colour_bulb):
     # still showing an alert
     if (not delays) and colour_bulb.alert_active:
         if colour_bulb.is_red():
-            LOGGER.debug("Turn indicator bulb off.  No more delays")
+            LOGGER.info("Turn indicator bulb off.  No more delays")
             colour_bulb.set_white_off()
             if not colour_bulb.is_red():
                 colour_bulb.alert_active = False
@@ -320,7 +320,7 @@ def hive_bulb_checks(delays, colour_bulb):
     # still showing an alert
     if not cfg.schedule_check(sched) and colour_bulb.alert_active:
         if colour_bulb.is_red():
-            LOGGER.debug(
+            LOGGER.info(
                 "Schedule is off, " "bulb is indicating delays so we turn it off"
             )
             colour_bulb.set_white_off()
@@ -343,7 +343,7 @@ def button_press(cmd, sitt_group, freezer_sensor, voice_strings):
     """
     # short press: Toggle the sitting room group all on or all off
     if cmd["msgCode"] == "04":
-        LOGGER.debug("Button Short Press: Toggling lights")
+        LOGGER.info("Button Short Press: Toggling lights")
         sitt_group.toggle()
 
     # double press or long press
@@ -351,13 +351,13 @@ def button_press(cmd, sitt_group, freezer_sensor, voice_strings):
 
         # Play train notifications
         if cmd["msgCode"] == "08":
-            LOGGER.debug("Button Double Press: Playing voice strings")
+            LOGGER.info("Button Double Press: Playing voice strings")
             voice_strings.play()
             # play_voice_strings([voice_strings])
 
         # Play hot water level and toggle the freezer alarm setting
         elif cmd["msgCode"] == "10":
-            LOGGER.debug("Button Long Press: Playing msg")
+            LOGGER.info("Button Long Press: Playing msg")
 
             uwl = udp_cli.send_cmd(
                 udp_cli.UWL_MESSAGE, udp_cli.UWL_RESP, udp_cli.ADDRESS
@@ -418,7 +418,7 @@ def button_press_handler(button_press_queue, hive_indication, voice_strings):
 
             # Handle doorbell button press
             if cmd["nodeId"] == cfg.BELL_BUTTON_ID:
-                LOGGER.debug("Doorbell button press.  Playing doorbell sound.")
+                LOGGER.info("Doorbell button press.  Playing doorbell sound.")
                 doorbell_press(colour_bulb)
 
             # # Save the temperature and update the state_machine
@@ -447,7 +447,7 @@ def button_press_handler(button_press_queue, hive_indication, voice_strings):
                 temperature = hex_temp.convert_s16(temperature) / 100
                 freezer_sensor.update_temperature(temperature)
 
-                LOGGER.debug("TEMPERATURE, %s, %s", node_id, freezer_sensor.temp)
+                LOGGER.info("TEMPERATURE, %s, %s", node_id, freezer_sensor.temp)
 
             # CHECKIN:2F28,06,00
             regex = "CHECKIN:[0-9a-fA-F]{4},06"
@@ -484,7 +484,7 @@ class Voice:
             # ValueError can occur if there's no colon in the time HH:MM
             # AttributeError occurs if any vars are None
             except (ValueError, AttributeError):
-                LOGGER.debug("Error parsing times in build_voice_string")
+                LOGGER.error("Error parsing times in build_voice_string")
                 delay_time = None
 
             voice_string = (
@@ -555,7 +555,7 @@ def start_thread(thread_func, args, thread_name, thread_pool):
     thread.daemon = True
     thread.start()
     thread.name = thread_name
-    LOGGER.debug("%s thread started.", thread_name)
+    LOGGER.info("%s thread started.", thread_name)
     thread_pool.append(thread)
 
 
@@ -623,8 +623,8 @@ def main():
     while True:
         for thd in thread_pool:
             if not thd.is_alive():
-                LOGGER.debug("ERROR: THREAD HAS STOPPED: %s", thd.name)
-                LOGGER.debug("Exiting program to allow clean restart")
+                LOGGER.error("ERROR: THREAD HAS STOPPED: %s", thd.name)
+                LOGGER.error("Exiting program to allow clean restart")
                 sys.exit()
 
         time.sleep(0.1)
