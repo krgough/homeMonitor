@@ -146,7 +146,7 @@ def configure_logger(logger_name, log_path=None):
     }
 
     file_handler = {
-        "level": "DEBUG",
+        "level": "INFO",
         "class": "logging.handlers.RotatingFileHandler",
         "formatter": "default",
         "filename": log_path,
@@ -162,11 +162,7 @@ def configure_logger(logger_name, log_path=None):
                 "formatters": formatters,
                 "handlers": {"file": file_handler},
                 "loggers": {
-                    "": {"level": "DEBUG", "handlers": ["file"]},
-                    "urllib3": {
-                        "handlers": ["file"],
-                        "level": logging.WARNING
-                    }
+                    "": {"level": "DEBUG", "handlers": ["file"]}
                 },
             }
         )
@@ -181,6 +177,8 @@ def configure_logger(logger_name, log_path=None):
             }
         )
 
+    #logging.getLogger("zigbeetools.threaded_serial").setLevel(file_handler["level"])
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
     logging.getLogger("requests").setLevel(logging.WARNING)
     logging.getLogger("botocore").setLevel(logging.WARNING)
 
