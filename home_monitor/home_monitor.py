@@ -177,7 +177,7 @@ def configure_logger(logger_name, log_path=None):
             }
         )
 
-    #logging.getLogger("zigbeetools.threaded_serial").setLevel(file_handler["level"])
+    # logging.getLogger("zigbeetools.threaded_serial").setLevel(file_handler["level"])
     logging.getLogger("urllib3").setLevel(logging.WARNING)
     logging.getLogger("requests").setLevel(logging.WARNING)
     logging.getLogger("botocore").setLevel(logging.WARNING)
@@ -310,22 +310,34 @@ def hive_bulb_checks(delays, colour_bulb):
     # Turn off the Hive bulb if no delays and we think we are
     # still showing an alert
     if (not delays) and colour_bulb.alert_active:
+        LOGGER.info("No more delays.  Alert active.  Attempting to cancel alert..")
         if colour_bulb.is_red():
-            LOGGER.info("Turn indicator bulb off.  No more delays")
+            LOGGER.info("Bulb is red so set it to white")
             colour_bulb.set_white_off()
             if not colour_bulb.is_red():
+                LOGGER.info("Bulb is not red.  Alert cancelled")
                 colour_bulb.alert_active = False
+            else:
+                LOGGER.error("Bulb set to white failed.  Alert still active.")
+        else:
+            LOGGER.info("Bulb is not red.  Alert cancelled")
+            colour_bulb.alert_active = False
 
     # Turn off hive bulb if schedule is off and we think we are
     # still showing an alert
     if not cfg.schedule_check(sched) and colour_bulb.alert_active:
+        LOGGER.info("Schedule OFF, Alert Active.  Attempting to cancel alert...")
         if colour_bulb.is_red():
-            LOGGER.info(
-                "Schedule is off, " "bulb is indicating delays so we turn it off"
-            )
+            LOGGER.info("Bulb is red so set it to white and off")
             colour_bulb.set_white_off()
             if not colour_bulb.is_red():
+                LOGGER.info("Bulb is not red.  Alert canceled.")
                 colour_bulb.alert_active = False
+            else:
+                LOGGER.error("Bulb set to white failed.  Alert still active.")
+        else:
+            LOGGER.info("Bulb is not red.  Alert canceled.")
+            colour_bulb.alert_active = False
 
 
 def button_press(cmd, sitt_group, freezer_sensor, voice_strings):
