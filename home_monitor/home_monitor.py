@@ -489,16 +489,6 @@ class Voice:
             to_station = get_station_name(delay["to"])
             from_station = get_station_name(delay["from"])
 
-            try:
-                etd = timestamp_from_time_string(delay["etd"])
-                std = timestamp_from_time_string(delay["std"])
-                delay_time = int((etd - std) / 60)
-            # ValueError can occur if there's no colon in the time HH:MM
-            # AttributeError occurs if any vars are None
-            except (ValueError, AttributeError):
-                LOGGER.error("Error parsing times in build_voice_string")
-                delay_time = None
-
             voice_string = (
                 f"The {delay['std']} from {from_station} to {to_station}, is "
             )
@@ -510,6 +500,17 @@ class Voice:
                     voice_string += "cancelled."
             else:
                 voice_string += "delayed"
+
+                try:
+                    etd = timestamp_from_time_string(delay["etd"])
+                    std = timestamp_from_time_string(delay["std"])
+                    delay_time = int((etd - std) / 60)
+                # ValueError can occur if there's no colon in the time HH:MM
+                # AttributeError occurs if any vars are None
+                except (ValueError, AttributeError):
+                    LOGGER.error("Error parsing times in build_voice_string")
+                    delay_time = None
+
                 if delay_time:
                     voice_string += f" by {delay_time} minutes."
 
