@@ -508,7 +508,8 @@ class Voice:
                 # ValueError can occur if there's no colon in the time HH:MM
                 # AttributeError occurs if any vars are None
                 except (ValueError, AttributeError):
-                    LOGGER.error("Error parsing times in build_voice_string")
+                    LOGGER.error("Could not parse etd|std from the delay")
+                    LOGGER.error(delay)
                     delay_time = None
 
                 if delay_time:
