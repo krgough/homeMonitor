@@ -34,8 +34,23 @@ import re
 from pprint import pprint
 import json
 import os
+import sys
 
 import boto3
+
+LOGGER = logging.getLogger(__name__)
+
+AUTH_DATA = {
+    "HIVE_USERNAME": None,
+    "HIVE_PASSWORD": None,
+}
+
+# Load the env vars
+for env in AUTH_DATA:
+    AUTH_DATA[env] = os.environ.get(env)
+    if not AUTH_DATA[env]:
+        LOGGER.error("Environment variable not found: %s", env)
+        sys.exit(1)
 
 
 class SrpError(Exception):
@@ -389,15 +404,15 @@ def main():
     """Main Program"""
     print("\nSRP Module - Test Mode")
     print("----------------------\n")
-    print("Attempt to authemticate with HIVE cognito.")
+    print("Attempt to authenticate with HIVE cognito.")
     print("Will require you to enter the MFA code sent by SMS to mobile phone")
 
     inp = input('Proceed y/n? ')
     if inp.upper() == 'Y':
 
         srp = AWSSRP(
-            username='krgough@gmail.com',
-            password='sealsatnewtown22',
+            username=AUTH_DATA["HIVE_USERNAME"],
+            password=AUTH_DATA["HIVE_PASSWORD"],
             pool_id='SamNfoWtf',
             client_id='3rl4i0ajrmtdm8sbre54p9dvd9',
             pool_region='eu-west-1'
