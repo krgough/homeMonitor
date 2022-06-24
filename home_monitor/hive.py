@@ -32,7 +32,6 @@ import srp
 LOGGER = logging.getLogger(__name__)
 TOKEN_FILE = ".tokens.json"
 
-#  KG TODO: Remove useranme and password from srp and this file.
 
 URLS = {
     "properties": "https://sso.hivehome.com/",
