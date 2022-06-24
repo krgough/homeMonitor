@@ -33,7 +33,7 @@ class HiveAlarm():
         """Set alarm state according to the schedule"""
         new_state = cfg.schedule_check(cfg.HIVE_ALARM_ON_SCHEDULE)
 
-        # If existing state does not match new_stae then we need to change state
+        # If existing state does not match new_state then we need to change state
         if self.state != new_state:
 
             if new_state:
