@@ -13,7 +13,7 @@ INDICATOR_BULB = "Sitt Colour"
 TIMEZONE = "Europe/London"
 TRAIN_DELAY_INDICATION_SCHEDULE = [("06:00", "08:00")]
 FREEZER_SENSOR_OFFLINE_SCHEDULE = [("08:01", "22:00")]
-HIVE_ALARM_ON_SCHEDULE = [("22:00", "06:00")]
+HIVE_ALARM_ON_SCHEDULE = [("23:00", "05:00")]
 
 FREEZER_TEMP_THOLD = -10  # Freezer temperature alert threshold
 SENSOR_OFFLINE_TIME = 60 * 60  # Time in seconds before we declare offline
