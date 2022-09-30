@@ -49,7 +49,7 @@ We use our own network for the button because the ZigBee button uses an NXP devi
 
 To setup the temperature sensor:
 
-*   Pair a USB stick to the Hive network but set the device type to be 0x01 rather than 0x07. This stops it appearing as a second hub (co-ordinator).
+*   Pair a USB stick to the Hive network but set the device type to be 0x01 rather than 0x07 (SREG 49 should be set to 0x0001). This stops it appearing as a second hub (co-ordinator).  Note that this USB stick becomes our "HIVE" connected USB and will be plugged into the rPi.  If you need to reset the temp sensor then log into the rPi and connect to this USB using screen and follow the instructions below.
 *   Pair the temperature sensor (door/window sensor) to the Hive network - monitor the USB stick using a serial terminal program during the device pairing. This allows you to capture the node id when it joins.
 *   Set additional pairing and attribute reporting on that sensor as shown below...
 
@@ -81,6 +81,7 @@ We have several module that can be used as follows:
 *   zigbee\_methods.py - Module that handles all the interactions with ZigBee devices on the Hive network.
 
 /etc/environment - Contains the env vars required
+
 ```
 # KG: National Rail Token for API access
 export NATIONAL_RAIL_TOKEN='token-here-keep-quotes'
@@ -89,7 +90,6 @@ export HIVE_API_PATH='/home/pi/repositories/apiLogger/'
 # KG: Hive Access
 export HIVE_USERNAME=<hive-username>
 export HIVE_PASSWORD=<hive-password>
-
 ```
 
 ### Hot Water RPI Setup
