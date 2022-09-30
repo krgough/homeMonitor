@@ -5,10 +5,10 @@ Uses ZigBee USB devices running AT command firmware to monitor and control ZigBe
 We have a second rPi close the hot water cylinder that monitors temperature sensors on the cylinder. We then make an approximation of the 45'C level in the tank as a percentage. We have a UDP listener running on the rPi that will send the hot-water level on receipt of the command "uwl=?" (usable hot water level)
 
 ```
-                       HIVE_ZIGBEE_USB < zigbee > HIVE DEVICES (Bulbs etc)
+                       HIVE_ZIGBEE_USB < zigbee > HIVE DEVICES (Bulbs etc), Freezer Temp Sensor
                      /
                     /
-HOME_MONITOR_RPI - - - ZIGBEE_USB < zigbee > Button, Garage Plug (to act as range extended), Freezer Temp Sensor
+HOME_MONITOR_RPI - - - ZIGBEE_USB < zigbee > Button
                     \
                      \
                        HOT_WATER_UDP_CLIENT < udp command/response > RPI_HOT_WATER_UDP_SERVER <> Temperature sensors on cylinder
@@ -43,11 +43,11 @@ Use these command line options:
 We have 2 ZigBee USB devices attached to the rpi:
 
 *   One paired to the Hive network to allow us to send and receive commands on that network
-*   One setup as a co-ordinator for a separate network. We use this to monitor a button (for turning lights on/off) and a temperature sensor (contact sensor in freezer).
+*   One setup as a co-ordinator for a separate network. We use this to monitor a button (for turning lights on/off)
 
-We use our own network for the button and the temperature sensor to prevent the Hive hub code overwriting the attributes that we have set on those devices. Note also the the ZigBee button uses an NXP device and SW stack. This device does not always work correctly when used in a network of SiLabs devices and can drop offline (particularly if routing through another device). Keeping the button on a separate small network seems to keep it online.
+We use our own network for the button because the ZigBee button uses an NXP device and SW stack. This device does not always work correctly when used in a network of SiLabs devices and can drop offline (particularly if routing through another device). Keeping the button on a separate small network seems to keep it online.
 
-For the temperature sensor:
+To setup the temperature sensor:
 
 *   Pair a USB stick to the Hive network but set the device type to be 0x01 rather than 0x07. This stops it appearing as a second hub (co-ordinator).
 *   Pair the temperature sensor (door/window sensor) to the Hive network - monitor the USB stick using a serial terminal program during the device pairing. This allows you to capture the node id when it joins.
