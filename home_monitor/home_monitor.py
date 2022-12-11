@@ -34,7 +34,7 @@ from udpcomms import hex_temp
 import udpcomms.hot_water_udp_client as udp_cli
 import zigbeetools.threaded_serial as at
 
-import train_times as tt
+import train_times2 as tt
 import led_pattern_generator as led
 import button_listener as bl
 import config as cfg
@@ -259,7 +259,7 @@ def check_for_delays(args, voice_strings):
         delays = load_debug_delays()
         if not delays:
             delays = tt.get_delays(
-                args["from_station"], args["to_station"], pretty_print=False
+                args["from_station"], args["to_station"],
             )
 
         for delay in delays:
