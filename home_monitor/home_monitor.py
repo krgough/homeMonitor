@@ -201,15 +201,7 @@ def flush_queue(my_queue):
 # Train functions
 def get_station_name(crs_code):
     """Get the station name for the given crs code"""
-    station_name = None
-    # Get all the crs codes
-    resp_status, resp = tt.get_stations()
-    if resp_status:
-        stations = json.loads(resp.text)
-        for station in stations:
-            if crs_code.upper() == station["crsCode"]:
-                return station["stationName"]
-    return station_name
+    return tt.get_station_name(crs_code)
 
 
 def load_debug_delays():
