@@ -186,7 +186,7 @@ def get_crs_codes(name):
         print(tabulate(crs))
 
 
-def get_stations(crs_code):
+def get_station_name(crs_code):
     """Lookup a station name from a CRS code"""
     with open("crs.csv", mode="r", encoding="utf-8") as file:
         for line in file:
@@ -283,7 +283,7 @@ def main():
         if args.name:
             get_crs_codes(name=args.name)
         if args.code:
-            print(get_stations(crs_code=args.code))
+            print(get_station_name(crs_code=args.code))
 
 
 if __name__ == "__main__":
