@@ -80,7 +80,7 @@ HEADER_VALUE = HEADER(TokenValue=ACCESS_TOKEN)
 def get_args():
     """Get the cli arguments"""
     parser = ArgumentParser(description="Get live train data from National Rail")
-    subparsers = parser.add_subparsers(help="Subcommands:")
+    subparsers = parser.add_subparsers(help="Subcommands:", dest='command')
     subparsers.required = True
 
     departures = subparsers.add_parser('departures', help="Get departure board")
@@ -181,12 +181,13 @@ def get_crs_codes(args):
         print(tabulate(crs))
 
 
-def get_arrivals(args):
+def get_arrivals(from_crs, to_crs):
     """Get the arrivals boards for the given station"""
-    res = args.client.service.GetArrivalBoard(
+    client = Client(wsdl=WSDL, settings=SETTINGS)
+    res = client.service.GetArrivalBoard(
         numRows=10,
-        crs=args.to_crs,
-        filterCrs=args.from_crs,
+        crs=to_crs,
+        filterCrs=from_crs,
         filterType='from',
         _soapheaders=[HEADER_VALUE]
     )
@@ -211,13 +212,13 @@ def get_arrivals(args):
     return results
 
 
-def get_departures(args):
+def get_departures(from_crs, to_crs):
     """Get the departure board for the given stations"""
-
-    res = args.client.service.GetDepartureBoard(
+    client = Client(wsdl=WSDL, settings=SETTINGS)
+    res = client.service.GetDepartureBoard(
         numRows=10,
-        crs=args.from_crs,
-        filterCrs=args.to_crs,
+        crs=from_crs,
+        filterCrs=to_crs,
         filterType='to',
         _soapheaders=[HEADER_VALUE]
     )
@@ -241,9 +242,9 @@ def get_departures(args):
     return results
 
 
-def get_delays(args):
+def get_delays(from_crs, to_crs):
     """Get Departure Delays"""
-    departures = get_departures(args)
+    departures = get_departures(from_crs, to_crs)
     delays = [d for d in departures if d['etd'] != "On time"]
     return delays
 
@@ -251,11 +252,19 @@ def get_delays(args):
 def main():
     """Entry Point"""
     args = get_args()
-    args.client = Client(wsdl=WSDL, settings=SETTINGS)
-    results = args.func(args)
-    print(tabulate(results, headers='keys'))
+
+    if args.command == 'departures':
+        results = get_departures(to_crs=args.to_crs, from_crs=args.from_crs)
+    elif args.command == 'arrivals':
+        results = get_arrivals(to_crs=args.to_crs, from_crs=args.from_crs)
+    elif args.command == 'delays':
+        results = get_delays(to_crs=args.to_crs, from_crs=args.from_crs)
+
+    if results:
+        print(tabulate(results, headers='keys'))
+    else:
+        print("No results")
 
 
 if __name__ == "__main__":
     main()
-
