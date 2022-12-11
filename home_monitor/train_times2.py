@@ -126,6 +126,11 @@ def get_args():
         type=str,
         help="Find CRS for given station name"
     )
+    crs_codes.add_argument(
+        "-c", "--code",
+        type=str,
+        help="Find Station Name for a given CRS"
+    )
 
     delays = subparsers.add_parser(
         "delays",
@@ -155,7 +160,7 @@ def get_args():
     return args
 
 
-def get_crs_codes(args):
+def get_crs_codes(name):
     """Get a list of the crs station codes
     This convoluted csv file read is required because the data
     is in multiple columns and there is at least one station name
@@ -175,10 +180,20 @@ def get_crs_codes(args):
                 crs.append(row[i:i+2])
     crs = sorted(crs, key=lambda x: x[0])
 
-    if args.name:
-        print([station for station in crs if station[0] == args.name])
+    if name:
+        print(f"Station: {name}, CRS={[station for station in crs if station[0] == name][0][1]}")
     else:
         print(tabulate(crs))
+
+
+def get_stations(crs_code):
+    """Lookup a station name from a CRS code"""
+    with open("crs.csv", mode="r", encoding="utf-8") as file:
+        for line in file:
+            row = line.strip().rsplit(",", 1)
+            if row[1] == crs_code:
+                return row[0]
+    return ""
 
 
 def get_arrivals(from_crs, to_crs):
@@ -252,6 +267,7 @@ def get_delays(from_crs, to_crs):
 def main():
     """Entry Point"""
     args = get_args()
+    results = []
 
     if args.command == 'departures':
         results = get_departures(to_crs=args.to_crs, from_crs=args.from_crs)
@@ -262,8 +278,12 @@ def main():
 
     if results:
         print(tabulate(results, headers='keys'))
-    else:
-        print("No results")
+
+    if args.command == 'crs-codes':
+        if args.name:
+            get_crs_codes(name=args.name)
+        if args.code:
+            print(get_stations(crs_code=args.code))
 
 
 if __name__ == "__main__":
