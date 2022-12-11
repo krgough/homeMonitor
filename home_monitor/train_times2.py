@@ -110,21 +110,39 @@ def get_args():
     )
 
     arrivals.add_argument(
-        '-t', "--to_crs",
+        "-t", "--to_crs",
         type=str.upper,
         required=True,
         help="CRS Station code for 'to' station e.g. WAT for London Waterloo"
     )
 
     crs_codes = subparsers.add_parser(
-        'crs-codes',
+        "crs-codes",
         help="Show a list of station CRS codes or find a given CRS",
     )
     crs_codes.set_defaults(func=get_crs_codes)
     crs_codes.add_argument(
-        '-n', "--name",
+        "-n", "--name",
         type=str,
         help="Find CRS for given station name"
+    )
+
+    delays = subparsers.add_parser(
+        "delays",
+        help="Show departure delays"
+    )
+    delays.set_defaults(func=get_delays)
+    delays.add_argument(
+        '-f', "--from_crs",
+        type=str.upper,
+        required=True,
+        help="CRS Station code for 'from' station e.g. WIN for Winchester"
+    )
+    delays.add_argument(
+        "-t", "--to_crs",
+        type=str.upper,
+        required=True,
+        help="CRS Station code for 'to' station e.g. WAT for London Waterloo"
     )
 
     args = parser.parse_args()
@@ -223,6 +241,13 @@ def get_departures(args):
     return results
 
 
+def get_delays(args):
+    """Get Departure Delays"""
+    departures = get_departures(args)
+    delays = [d for d in departures if d['etd'] != "On time"]
+    return delays
+
+
 def main():
     """Entry Point"""
     args = get_args()
@@ -233,3 +258,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

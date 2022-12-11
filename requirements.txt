@@ -6,3 +6,4 @@ RPi.GPIO
 boto3
 pyquery
 tabulate
+zeep
