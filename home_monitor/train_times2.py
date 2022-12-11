@@ -186,8 +186,8 @@ def get_arrivals(from_crs, to_crs):
     client = Client(wsdl=WSDL, settings=SETTINGS)
     res = client.service.GetArrivalBoard(
         numRows=10,
-        crs=to_crs,
-        filterCrs=from_crs,
+        crs=to_crs.upper(),
+        filterCrs=from_crs.upper(),
         filterType='from',
         _soapheaders=[HEADER_VALUE]
     )
@@ -217,8 +217,8 @@ def get_departures(from_crs, to_crs):
     client = Client(wsdl=WSDL, settings=SETTINGS)
     res = client.service.GetDepartureBoard(
         numRows=10,
-        crs=from_crs,
-        filterCrs=to_crs,
+        crs=from_crs.upper(),
+        filterCrs=to_crs.upper(),
         filterType='to',
         _soapheaders=[HEADER_VALUE]
     )
