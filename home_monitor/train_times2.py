@@ -84,7 +84,7 @@ def get_args():
     subparsers.required = True
 
     departures = subparsers.add_parser('departures', help="Get departure board")
-    departures.set_defaults(func=get_departure_board)
+    departures.set_defaults(func=get_departures)
 
     departures.add_argument(
         '-f', "--from_crs",
@@ -100,7 +100,7 @@ def get_args():
     )
 
     arrivals = subparsers.add_parser('arrivals', help="Get arrivals board")
-    arrivals.set_defaults(func=get_arrival_board)
+    arrivals.set_defaults(func=get_arrivals)
 
     arrivals.add_argument(
         '-f', "--from_crs",
@@ -163,7 +163,7 @@ def get_crs_codes(args):
         print(tabulate(crs))
 
 
-def get_arrival_board(args):
+def get_arrivals(args):
     """Get the arrivals boards for the given station"""
     res = args.client.service.GetArrivalBoard(
         numRows=10,
@@ -193,7 +193,7 @@ def get_arrival_board(args):
     return results
 
 
-def get_departure_board(args):
+def get_departures(args):
     """Get the departure board for the given stations"""
 
     res = args.client.service.GetDepartureBoard(
