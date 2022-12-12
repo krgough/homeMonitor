@@ -219,6 +219,8 @@ def get_arrivals(from_crs, to_crs):
             "cancelReason": train.cancelReason,
             "delayReason": train.delayReason,
             "platform": train.platform,
+            "to": to_crs.upper(),
+            "from": from_crs.upper(),
             "origin": [org.locationName for org in train.origin.location],
             "destination": [org.locationName for org in train.destination.location],
         }
@@ -249,6 +251,8 @@ def get_departures(from_crs, to_crs):
             "cancelReason": train.cancelReason,
             "delayReason": train.delayReason,
             "platform": train.platform,
+            "to": to_crs.upper(),
+            "from": from_crs.upper(),
             "origin": [org.locationName for org in train.origin.location],
             "destination": [org.locationName for org in train.destination.location],
         }
