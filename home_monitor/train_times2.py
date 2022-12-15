@@ -263,7 +263,7 @@ def get_departures(from_crs, to_crs):
             }
             for train in services
         ]
-     except KeyError as err:
+    except KeyError as err:
         LOGGER.error("Did not find 'services' key in soap response: %s", res)
         results = []
     return results
