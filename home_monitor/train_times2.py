@@ -207,25 +207,29 @@ def get_arrivals(from_crs, to_crs):
         _soapheaders=[HEADER_VALUE]
     )
 
-    services = res.trainServices.service
-    print(services)
-    results = [
-        {
-            "std": train.std,
-            "etd": train.etd,
-            "sta": train.sta,
-            "eta": train.eta,
-            "isCancelled": train.isCancelled,
-            "cancelReason": train.cancelReason,
-            "delayReason": train.delayReason,
-            "platform": train.platform,
-            "to": to_crs.upper(),
-            "from": from_crs.upper(),
-            "origin": [org.locationName for org in train.origin.location],
-            "destination": [org.locationName for org in train.destination.location],
-        }
-        for train in services
-    ]
+    try:
+        services = res.trainServices.service
+        print(services)
+        results = [
+            {
+                "std": train.std,
+                "etd": train.etd,
+                "sta": train.sta,
+                "eta": train.eta,
+                "isCancelled": train.isCancelled,
+                "cancelReason": train.cancelReason,
+                "delayReason": train.delayReason,
+                "platform": train.platform,
+                "to": to_crs.upper(),
+                "from": from_crs.upper(),
+                "origin": [org.locationName for org in train.origin.location],
+                "destination": [org.locationName for org in train.destination.location],
+            }
+            for train in services
+        ]
+    except KeyError as err:
+        LOGGER.error("Did not find 'services' key in the soap response:", res)
+        results = []
     return results
 
 
@@ -240,24 +244,28 @@ def get_departures(from_crs, to_crs):
         _soapheaders=[HEADER_VALUE]
     )
 
-    services = res.trainServices.service
-    results = [
-        {
-            "std": train.std,
-            "etd": train.etd,
-            "sta": train.sta,
-            "eta": train.eta,
-            "isCancelled": train.isCancelled,
-            "cancelReason": train.cancelReason,
-            "delayReason": train.delayReason,
-            "platform": train.platform,
-            "to": to_crs.upper(),
-            "from": from_crs.upper(),
-            "origin": [org.locationName for org in train.origin.location],
-            "destination": [org.locationName for org in train.destination.location],
-        }
-        for train in services
-    ]
+    try:
+        services = res.trainServices.service
+        results = [
+            {
+                "std": train.std,
+                "etd": train.etd,
+                "sta": train.sta,
+                "eta": train.eta,
+                "isCancelled": train.isCancelled,
+                "cancelReason": train.cancelReason,
+                "delayReason": train.delayReason,
+                "platform": train.platform,
+                "to": to_crs.upper(),
+                "from": from_crs.upper(),
+                "origin": [org.locationName for org in train.origin.location],
+                "destination": [org.locationName for org in train.destination.location],
+            }
+            for train in services
+        ]
+     except KeyError as err:
+        LOGGER.error("Did not find 'services' key in soap response: %s", res)
+        results = []
     return results
 
 
