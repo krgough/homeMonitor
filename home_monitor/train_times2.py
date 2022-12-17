@@ -83,6 +83,13 @@ def get_args():
     """Get the cli arguments"""
     parser = ArgumentParser(description="Get live train data from National Rail")
     subparsers = parser.add_subparsers(help="Subcommands:", dest='command')
+
+    parser.add_argument(
+        "-v", "--verbose",
+        action="store_true",
+        help="Set logging level to DEBUG"
+    )
+
     subparsers.required = True
 
     departures = subparsers.add_parser('departures', help="Get departure board")
@@ -208,7 +215,7 @@ def get_arrivals(from_crs, to_crs):
         filterType='from',
         _soapheaders=[HEADER_VALUE]
     )
-
+    LOGGER.debug(res)
     try:
         services = res.trainServices.service
         results = [
@@ -229,8 +236,8 @@ def get_arrivals(from_crs, to_crs):
             for train in services
         ]
 
-    except AttributeError as err:
-        LOGGER.error("Did not find 'services' key in the soap response:", res)
+    except AttributeError:
+        LOGGER.error("Did not find 'services' key in the soap response: %s", res)
         results = []
 
     return results
@@ -267,7 +274,7 @@ def get_departures(from_crs, to_crs):
             for train in services
         ]
 
-    except AttributeError as err:
+    except AttributeError:
         LOGGER.error("Did not find 'services' key in soap response: %s", res)
         results = []
 
@@ -283,8 +290,16 @@ def get_delays(from_crs, to_crs):
 
 def main():
     """Entry Point"""
-    logging.basicConfig(level=logging.DEBUG)
     args = get_args()
+
+    logging.getLogger("zeep").setLevel(level=logging.WARNING)
+    logging.getLogger("urllib3").setLevel(level=logging.WARNING)
+
+    if args.verbose:
+        logging.basicConfig(level=logging.DEBUG)
+    else:
+        logging.basicConfig(level=logging.INFO)
+
     results = []
 
     if args.command == 'departures':
