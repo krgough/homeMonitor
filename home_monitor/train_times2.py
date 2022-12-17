@@ -33,6 +33,7 @@ https://github.com/openraildata/openldbws-example-python/blob/main/getDepartureB
 """
 from argparse import ArgumentParser
 import csv
+import logging
 import sys
 from textwrap import dedent
 
@@ -42,6 +43,7 @@ import requests
 from tabulate import tabulate
 from zeep import Client, Settings, xsd
 
+LOGGER = logging.getLogger(__name__)
 NATIONAL_RAIL_TOKEN_NAME = "NATIONAL_RAIL_TOKEN"
 
 try:
@@ -227,7 +229,7 @@ def get_arrivals(from_crs, to_crs):
             for train in services
         ]
 
-    except KeyError as err:
+    except AttributeError as err:
         LOGGER.error("Did not find 'services' key in the soap response:", res)
         results = []
 
@@ -244,7 +246,7 @@ def get_departures(from_crs, to_crs):
         filterType='to',
         _soapheaders=[HEADER_VALUE]
     )
-
+    LOGGER.debug(res)
     try:
         services = res.trainServices.service
         results = [
@@ -265,7 +267,7 @@ def get_departures(from_crs, to_crs):
             for train in services
         ]
 
-    except KeyError as err:
+    except AttributeError as err:
         LOGGER.error("Did not find 'services' key in soap response: %s", res)
         results = []
 
@@ -281,6 +283,7 @@ def get_delays(from_crs, to_crs):
 
 def main():
     """Entry Point"""
+    logging.basicConfig(level=logging.DEBUG)
     args = get_args()
     results = []
 
