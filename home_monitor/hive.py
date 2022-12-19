@@ -20,7 +20,6 @@ import logging
 import sys
 import os
 from collections import namedtuple
-
 import time
 
 import requests
@@ -30,7 +29,7 @@ from pyquery import PyQuery
 import srp
 
 LOGGER = logging.getLogger(__name__)
-TOKEN_FILE = ".tokens.json"
+TOKEN_FILE = os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), ".tokens.json")
 
 
 URLS = {

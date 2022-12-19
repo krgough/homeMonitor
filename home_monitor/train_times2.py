@@ -78,7 +78,7 @@ HEADER = xsd.Element(
 )
 
 HEADER_VALUE = HEADER(TokenValue=ACCESS_TOKEN)
-CRS_FILE = "crs.csv"
+CRS_FILE = os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), "crs.csv")
 
 
 def get_args():
@@ -131,11 +131,11 @@ def get_args():
         "crs-codes",
         help="Show a list of station CRS codes or find a given CRS",
     )
-    crs_codes.set_defaults(func=get_crs_codes)
+    crs_codes.set_defaults(func=refresh_crs_codes_csv)
     crs_codes.add_argument(
-        "-n", "--name",
+        "-r", "--refresh",
         type=str,
-        help="Find CRS for given station name"
+        help="Refresh the CRS csv file"
     )
     crs_codes.add_argument(
         "-c", "--code",
@@ -309,11 +309,9 @@ def main():
     if results:
         print(tabulate(results, headers='keys'))
 
-    if args.command == 'crs-codes':
+    if args.command == 'refresh':
         if args.name:
-            get_crs_codes(name=args.name)
-        if args.code:
-            print(get_station_name(crs_code=args.code))
+            refresh_crs_codes_csv()
 
 
 if __name__ == "__main__":
