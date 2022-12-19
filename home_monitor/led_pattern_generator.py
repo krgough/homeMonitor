@@ -166,7 +166,7 @@ def read_args():
         sys.exit()
 
     # Confirm we have a colour if we need one
-    if my_pattern in list(COLOUR_PATTERNS.keys()):
+    if my_pattern in COLOUR_PATTERNS:
         if not my_colour:
             print("\nERROR: Colour not specified.  Try one of these:\n")
             print("\n".join(all_colours))
@@ -180,7 +180,7 @@ def serial_read_handler(ser):
     """Serial port read thread handler
     If serial timeout=None then thread blocks until a new line is available
     """
-    while not STOP_THREAD.isSet():
+    while not STOP_THREAD.is_set():
         reading = ser.read()
         # reading = ser.readline().decode(errors='replace').strip()
         if reading.hex() != "":
@@ -203,7 +203,7 @@ def serial_write_handler(ser):
     and wait for items
 
     """
-    while not STOP_THREAD.isSet():
+    while not STOP_THREAD.is_set():
         try:
             my_message = TX_QUEUE.get(timeout=1)
             ser.write(my_message)
@@ -682,6 +682,8 @@ def show_pattern(pattern, colour, debug=False):
 def main():
     """Main Program"""
     port, baud, pattern, colour, debug = read_args()
+    exit(1)
+
     if not debug:
         logging.basicConfig(level=logging.INFO)
         start_serial_threads(port, baud)

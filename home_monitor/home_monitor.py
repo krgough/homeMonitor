@@ -21,14 +21,12 @@ PEP8 Updates.
 import os
 import sys
 import getopt
-import json
 import time
 import threading
 import queue
 import re
 from textwrap import dedent
 import logging.config
-import yaml
 
 from udpcomms import hex_temp
 import udpcomms.hot_water_udp_client as udp_cli
@@ -204,18 +202,6 @@ def get_station_name(crs_code):
     return tt.get_station_name(crs_code)
 
 
-def load_debug_delays():
-    """Load debug delays from a yaml file"""
-    try:
-        fdir = os.path.dirname(os.path.realpath(__file__))
-        filename = os.path.join(fdir, "test_delays.yaml")
-        with open(filename, "r", encoding="utf-8") as file:
-            return yaml.safe_load(file.read())
-
-    except FileNotFoundError:
-        return None
-
-
 def check_for_delays(args, voice_strings):
     """Check for delays and create voice strings for any delays"""
 
@@ -244,15 +230,9 @@ def check_for_delays(args, voice_strings):
         #                               led.colours.GREEN_DIM)
 
         # Get the delay data
-        # Debug delays are in a file called debug_delays.yaml
-        # If we rename/delete that file then we get the 'real'
-        # delays using the api.  This means we can turn debugging
-        # on/off by manipulating that file while this is running.
-        delays = load_debug_delays()
-        if not delays:
-            delays = tt.get_delays(
-                args["from_station"], args["to_station"],
-            )
+        delays = tt.get_delays(
+            args["from_station"], args["to_station"],
+        )
 
         for delay in delays:
             LOGGER.debug(delay)
