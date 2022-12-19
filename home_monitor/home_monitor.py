@@ -236,7 +236,7 @@ def check_for_delays(args, voice_strings):
         alarm = hive_alarm.HiveAlarm()
 
     # Loop and sleep between runs
-    while not CHECK_THREAD_STOP.isSet():
+    while not CHECK_THREAD_STOP.is_set():
         # Turn off all the LEDs
         # if use_leds: led.show_pattern(LED_PORT,
         #                               LED_BAUD,

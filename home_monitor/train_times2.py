@@ -6,7 +6,7 @@ Module for accessing train times from the National Rail SOAP API
 Token should be saved as an env var called NATIONAL_RAIL_TOKEN
 Suggest setting these in /etc/environment as follows...
 
-# KG: National Rail Token for API access
+# National Rail Token for API access
 export NATIONAL_RAIL_TOKEN='<TOKEN_HERE>'
 
 National Rail API Key:
@@ -50,8 +50,8 @@ try:
     ACCESS_TOKEN = os.environ[NATIONAL_RAIL_TOKEN_NAME]
     # API_TOKEN_PATH = os.environ['HIVE_API_PATH']
 except KeyError:
-    print(dedent("""
-    ERROR: Enviroment variable 'HIVE_API_PATH' is not set.
+    print(dedent(f"""
+    ERROR: Enviroment variable {NATIONAL_RAIL_TOKEN_NAME} is not set.
     Get a token here:
     https://realtime.nationalrail.co.uk/OpenLDBWSRegistration/Registration
     Put it in an environment variable...
@@ -159,14 +159,7 @@ def get_args():
         help="CRS Station code for 'to' station e.g. WAT for London Waterloo"
     )
 
-    args = parser.parse_args()
-    # # Print help if no args supplied
-    # if not vars(args):
-    #     parser.print_help()
-    #     args = None
-    #     sys.exit(1)
-
-    return args
+    return parser.parse_args()
 
 
 def get_crs_codes(name):
