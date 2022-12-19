@@ -76,7 +76,9 @@ HEADER = xsd.Element(
             xsd.String()),
     ])
 )
+
 HEADER_VALUE = HEADER(TokenValue=ACCESS_TOKEN)
+CRS_FILE = "crs.csv"
 
 
 def get_args():
@@ -162,7 +164,7 @@ def get_args():
     return parser.parse_args()
 
 
-def get_crs_codes(name):
+def refresh_crs_codes_csv():
     """Get a list of the crs station codes
     This convoluted csv file read is required because the data
     is in multiple columns and there is at least one station name
@@ -175,26 +177,29 @@ def get_crs_codes(name):
     # Ignore the header line
     next(reader)
 
-    crs = []
+    crs = ["Station Name"]
     for row in reader:
         for i in range(0, len(row), 2):
             if row[i] != "":
                 crs.append(row[i:i+2])
     crs = sorted(crs, key=lambda x: x[0])
 
-    if name:
-        print(f"Station: {name}, CRS={[station for station in crs if station[0] == name][0][1]}")
-    else:
-        print(tabulate(crs))
+    with open(CRS_FILE, mode="w", encoding="UTF-8") as crs_file:
+        csv_writer = csv.writer(crs_file, quotechar='"')
+        csv_writer.writerow(["Station Name", "CRS"])
+        csv_writer.writerows(crs)
+
+    LOGGER.info("CRS file updated: %s", CRS_FILE)
 
 
 def get_station_name(crs_code):
     """Lookup a station name from a CRS code"""
-    with open("crs.csv", mode="r", encoding="utf-8") as file:
+    with open(CRS_FILE, mode="r", encoding="utf-8") as file:
         reader = csv.DictReader(file)
         for line in reader:
             if line['CRS'] == crs_code.upper():
                 return line['Station Name']
+    return None
 
 
 def get_arrivals(from_crs, to_crs):
