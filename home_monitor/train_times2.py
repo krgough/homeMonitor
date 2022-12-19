@@ -191,11 +191,10 @@ def get_crs_codes(name):
 def get_station_name(crs_code):
     """Lookup a station name from a CRS code"""
     with open("crs.csv", mode="r", encoding="utf-8") as file:
-        for line in file:
-            row = line.strip().rsplit(",", 1)
-            if row[1] == crs_code.upper():
-                return row[0]
-    return ""
+        reader = csv.DictReader(file)
+        for line in reader:
+            if line['CRS'] == crs_code.upper():
+                return line['Station Name']
 
 
 def get_arrivals(from_crs, to_crs):
