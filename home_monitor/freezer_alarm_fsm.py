@@ -76,7 +76,7 @@ class State:
     def __init__(self, bulb, sensor):
         self.sensor = sensor
         self.bulb = bulb
-        LOGGER.debug('Entering state: %s', str(self))
+        LOGGER.info('Entering state: %s', str(self))
 
     def on_event(self):
         """Handle events that are delegated to this State."""
@@ -92,9 +92,10 @@ class State:
 
 class TempNormal(State):
     """Temperature is normal"""
+
     def on_event(self):
         """Handle the events"""
-        # We should recieve temperature reports every 5mins
+        # We should receive temperature reports every 5mins
 
         # If no recent reports then transition to state=SensorOffline
         schedule = cfg.FREEZER_SENSOR_OFFLINE_SCHEDULE
@@ -119,12 +120,12 @@ class TempHigh(State):
     """
     def __init__(self, bulb, sensor):
         super().__init__(bulb, sensor)
-        LOGGER.debug("Freezer Alarm - setting bulb blue")
+        LOGGER.info("Freezer Alarm - setting bulb blue")
         self.bulb.set_blue()
 
     def on_event(self):
         if self.sensor.long_press_received:
-            LOGGER.debug("Exiting TempHigh setting bulb to white_on")
+            LOGGER.info("Exiting TempHigh setting bulb to white_on")
             self.sensor.long_press_received = False
             self.bulb.set_white()
             return Disabled
@@ -132,14 +133,14 @@ class TempHigh(State):
 
 
 class Disabled(State):
-    """We wait in disabled until the temperarture drops to normal
+    """We wait in disabled until the temperature drops to normal
 
-    Then we re-enble by jumping to state=TempNormal
+    Then we re-enable by jumping to state=TempNormal
     We use 1'C hysteresis from threshold to reset
     """
     def on_event(self):
         if self.sensor.online() and not self.sensor.temp_high:
-            LOGGER.debug("Temp is normal - enabling alarm")
+            LOGGER.info("Temp is normal - enabling alarm")
             return TempNormal
         return self
 
@@ -152,7 +153,7 @@ class OfflineDay(State):
         super().__init__(bulb, sensor)
 
         # It's daytime so we can show green
-        LOGGER.debug("Sensor Offline - setting bulb green")
+        LOGGER.info("Sensor Offline - setting bulb green")
         self.bulb.set_green()
 
     def on_event(self):
@@ -184,8 +185,7 @@ class OfflineNight(State):
     """
     def __init__(self, bulb, sensor):
         super().__init__(bulb, sensor)
-
-        LOGGER.debug("Sensor Offline - but out of hours, so no light")
+        LOGGER.info("Sensor Offline - but out of hours, so no light")
 
     def on_event(self):
         # If we have a recent report then sensor is online
