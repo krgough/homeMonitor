@@ -258,7 +258,8 @@ def check_for_delays(args, voice_strings):
         )
 
         # Check and set alarm state according to schedule
-        alarm.set_schedule_state()
+        if args["set_alarm"]:
+            alarm.set_schedule_state()
 
         # Now sleep
         time.sleep(DELAY_CHECK_SLEEP_TIME)
