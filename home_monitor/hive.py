@@ -15,22 +15,27 @@ headers - authorisation: token
 data = {"status": "OFF"}
 
 """
+
 import json
 import logging
 import sys
 import os
 from collections import namedtuple
 import time
+from textwrap import dedent
+import urllib3
 
+import pyquery
 import requests
-import tabulate
-from pyquery import PyQuery
+from tabulate import tabulate
 
-import srp
+import hive_auth as HiveAuth
 
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 LOGGER = logging.getLogger(__name__)
-TOKEN_FILE = os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), ".tokens.json")
 
+DEVICE_CREDS_FILE = os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), ".device_creds.json")
+DEVICE_ID = "Traindcator9000"
 
 URLS = {
     "properties": "https://sso.hivehome.com/",
@@ -44,19 +49,18 @@ URLS = {
 
 SITT_REAR_PLUG_ID = "61a8564c-1035-476a-9b46-3411cf75a0a2"
 
+# Load the env vars
 AUTH_DATA = {
-    "username": None,
-    "password": None,
-    "pool_id": None,
-    "client_id": None,
-    "pool_region": None,
+    "HIVE_USERNAME": None,
+    "HIVE_PASSWORD": None,
 }
 
-# Load the env vars
-for env in [('HIVE_USERNAME', 'username'), ('HIVE_PASSWORD', 'password')]:
-    AUTH_DATA[env[1]] = os.environ.get(env[0])
-    if not AUTH_DATA[env[1]]:
-        LOGGER.error("Environment variable not found: %s", env[0])
+for env in AUTH_DATA:
+    env_value = os.environ.get(env)
+    if env_value:
+        AUTH_DATA.update({env: os.environ.get(env)})
+    else:
+        LOGGER.error("Environment variable not found: %s", env)
         sys.exit(1)
 
 HEADERS = {
@@ -94,14 +98,55 @@ class ApiError(Exception):
     """Error from Hive API"""
 
 
-class TokenError(Exception):
-    """Error with api tokens"""
+def get_login_info():
+    """Get login properties to make the login request."""
+    data = requests.get(url=URLS['properties'], verify=False, timeout=60)
+    html = pyquery.PyQuery(data.content)
+    json_data = json.loads(
+        '{"'
+        + (html("script:first").text())
+        .replace(",", ', "')
+        .replace("=", '":')
+        .replace("window.", "")
+        + "}"
+    )
+
+    login_data = {
+        "UPID": json_data["HiveSSOPoolId"],
+        "CLIID": json_data["HiveSSOPublicCognitoClientId"],
+        "REGION": json_data["HiveSSOPoolId"],
+    }
+    return login_data
 
 
 class CogManager:
-    """Class to manage Hive Cognito Authorisation"""
+    """Class to manage Hive Cognito Authorisation
+    Use HiveAuth to create a new device and then save the creds to a file
+    Use device login to get tokens with the saved creds - tokens are ephemeral
+    so do not need to be saved to a file.
+    """
 
-    def __init__(self, auth_data, initial_auth) -> None:
+    def __init__(self, auth_data) -> None:
+
+        self.auth_data = auth_data
+
+        self.device_creds = {
+            "device_key": None,
+            "device_group_key": None,
+            "device_password": None
+        }
+
+        # Load device creds from a file.  Warns user if no file found.
+        self.load_device_creds()
+
+        self.auth = HiveAuth.HiveAuth(
+            username=AUTH_DATA["HIVE_USERNAME"],
+            password=AUTH_DATA["HIVE_PASSWORD"],
+            login_data=get_login_info(),
+            device_key=self.device_creds["device_key"],
+            device_group_key=self.device_creds["device_group_key"],
+            device_password=self.device_creds["device_password"],
+        )
 
         self.tokens = {
             "IdToken": None,
@@ -109,114 +154,42 @@ class CogManager:
             "RefreshToken": None,
         }
 
-        self.auth_data = auth_data
-        self.get_login_properties()
-        self.srp = srp.AWSSRP(**self.auth_data)
-
-        if initial_auth:
-            # Do the 2FA dance with auth sent to phone
-            self.initial_auth()
-        else:
-            # Load tokens from a file.  Warn user if no file found
-            self.load_tokens()
-
-    def get_login_properties(self):
-        """Call the Hive SSO endpoint to get the properties
-        required for the congnito login
-
-        We expect to get pool_id, client_id and pool_region
-        """
-        url = URLS["properties"]
-        req = requests.request(method="GET", url=url)
-        LOGGER.info("Getting auth data...")
-
-        if req.status_code != 200:
-            LOGGER.info("Unable to get login properties from %s", url)
-            sys.exit(1)
-
-        data = PyQuery(req.text)
-        json_data = json.loads(
-            '{"' + (data("script:first").text())
-            .replace("window.", "")
-            .replace("=", '":')
-            .replace(",", ',"') + "}"
-        )
-
-        self.auth_data["pool_region"] = json_data["HiveSSOPoolId"].split("_")[0]
-        self.auth_data["pool_id"] = json_data["HiveSSOPoolId"].split("_")[1]
-        self.auth_data["client_id"] = json_data["HiveSSOPublicCognitoClientId"]
-        # LOGGER.info("AUTH DATA = %s", self.auth_data)
-
-    def initial_auth(self):
-        """Authenticate and save tokens
-        Requires user to enter MFA token from SMS on mobile
-        """
-        print("\nAuthenticate with Hive Cognito")
-        print("------------------------------\n")
-        print("Attempt to authenticate with HIVE cognito. This will require")
-        print("you to enter the MFA code sent by SMS to mobile phone")
-        print("registered with your Hive account.")
-
-        inp = input("\nProceed with authentication y/n? ")
-        if inp.upper() == "Y":
-            tokens = self.srp.authenticate_user()
-            self.set_tokens(tokens["AuthenticationResult"])
-            self.save_tokens()
+    def device_login(self):
+        """Login using the registered device credentials"""
+        LOGGER.info("Logging in with device credentials...")
+        tokens = self.auth.device_login()
+        self.tokens.update(tokens["AuthenticationResult"])
 
     def refresh_auth(self) -> None:
         """Refresh Hive auth token
         Refresh operation only returns a new access_token and id_token but
-        no refresh_token.  We don't use the access_token but we will update
-        them anyway.
-        Have commented out the save operation here to avoid saving frequently
-        to disk.  This means only the initial_auth gets saved and we use the
-        re-fresh token from then on - not sure if these expire.
+        no refresh_token.
         """
         LOGGER.info("Refreshing authorisation...")
-        tokens = self.srp.refresh(self.tokens["RefreshToken"])
-        self.set_tokens(tokens["AuthenticationResult"])
+        tokens = self.auth.refresh_token(token=self.tokens["RefreshToken"])
+        self.tokens.update(tokens["AuthenticationResult"])
+        LOGGER.debug("Check if a new refresh token is returned...")
         LOGGER.debug(tokens)
-        # self.save_tokens()
 
-    def set_tokens(self, tokens):
-        """Set the values of each token"""
-        self.tokens["IdToken"] = tokens["IdToken"]
-        self.tokens["AccessToken"] = tokens["AccessToken"]
-
-        # Only update this one if it's present
-        # Otherwise we want to preserve any existing value
-        if "RefreshToken" in tokens:
-            self.tokens["RefreshToken"] = tokens["RefreshToken"]
-
-    def load_tokens(self, filename=TOKEN_FILE) -> None:
+    def load_device_creds(self, filename=DEVICE_CREDS_FILE) -> None:
         """Load tokens from the token file"""
         if not os.path.exists(filename):
             LOGGER.error("No token file.  Need to authenticate with 2FA.")
             LOGGER.error("Run hive.py manually to generate tokens")
-            # self.initial_auth()
-            raise TokenError("No token file")
+            raise FileNotFoundError("No token file")
 
         with open(filename, mode="r", encoding="utf-8") as file:
-            self.set_tokens(json.load(file))
-
-    def save_tokens(self) -> None:
-        """Modify the tokens object to make some attributes
-        easier to find.
-        Save tokens to a file.
-        """
-        # Save to a file
-        with open(TOKEN_FILE, mode="w", encoding="utf-8") as file:
-            json.dump(self.tokens, file, indent=4)
+            self.device_creds.update(json.load(file))
 
 
 class Account:
     """Class to manage Hive Account"""
 
-    def __init__(self, auth_data=None, initial_auth=False) -> None:
-        if not auth_data:
-            self.cog = CogManager(AUTH_DATA, initial_auth)
-        else:
-            self.cog = CogManager(auth_data, initial_auth)
+    def __init__(self, auth_data) -> None:
+
+        self.cog = CogManager(auth_data=auth_data)
+        self.cog.device_login()
+
         self.user = None
         self.devices = []
         self.products = []
@@ -264,7 +237,7 @@ class Account:
             headers["authorization"] = self.cog.tokens["IdToken"]
 
         resp = requests.request(
-            method=method, url=url, data=payload, headers=headers
+            method=method, url=url, data=payload, headers=headers, timeout=60
         )
 
         # Refresh tokens and Retry if we got a 401
@@ -280,7 +253,7 @@ class Account:
                 payload["token"] = self.cog.tokens["IdToken"]
 
             resp = requests.request(
-                method=method, url=url, data=payload, headers=headers
+                method=method, url=url, data=payload, headers=headers, timeout=60
             )
 
         # Set the error attribute if resp_code not correct
@@ -401,13 +374,13 @@ class Account:
 
     def __str__(self):
         """Print out the state off all devices"""
-        device_table = tabulate.tabulate(self.devices, headers="keys")
-        product_table = tabulate.tabulate(self.products, headers="keys")
-        user_table = tabulate.tabulate(
+        device_table = tabulate(self.devices, headers="keys")
+        product_table = tabulate(self.products, headers="keys")
+        user_table = tabulate(
             {"item": self.user.keys(), "value": self.user.values()},
             headers=["Field", "Value"],
         )
-        homes_table = tabulate.tabulate(self.homes, headers="keys")
+        homes_table = tabulate(self.homes, headers="keys")
 
         strings = [
             "\nUser Table", user_table,
@@ -485,6 +458,7 @@ def test_arm_disarm_alarm(acct):
     assert keypad is not None
 
     # Set alarm state
+    LOGGER.info("Setting Alarm State to AWAY")
     resp = acct.set_alarm_state(acct.homes[0]["id"], alarm_state="away")
     assert resp.error is None
 
@@ -492,8 +466,10 @@ def test_arm_disarm_alarm(acct):
     time.sleep(3)
     acct.update()
     assert keypad["state"] == "FULL_ARMED"
+    LOGGER.info("Alarm Sate: %s", keypad["state"])
 
     # Set alarm state
+    LOGGER.info("Setting Alarm State to DISARM")
     resp = acct.set_alarm_state(acct.homes[0]["id"], alarm_state="home")
     assert resp.error is None
 
@@ -501,23 +477,118 @@ def test_arm_disarm_alarm(acct):
     time.sleep(3)
     acct.update()
     assert keypad["state"] == "DISARM"
+    LOGGER.info("Alarm Sate: %s", keypad["state"])
+
+
+def list_devices(hive_auth, auth_data):
+    """List registered devices"""
+    devices = hive_auth.list_devices(auth_data["AuthenticationResult"]["AccessToken"])
+
+    devs = []
+    for device in devices['Devices']:
+        for attr in device['DeviceAttributes']:
+            if attr['Name'] == "device_name":
+                dev = attr['Value']
+        key = device['DeviceKey']
+        devs.append({"Device": dev, "Key": key})
+
+    print(tabulate(devs, headers="keys"))
+
+
+def registration_menu():
+    """Allow user to login with 2FA and create/delete a registered device"""
+
+    print("\nHive 2FA and Device Registration:\n")
+    print("This will attempt to authenticate with HIVE cognito using 2FA")
+    print("Will require you to enter the MFA code sent by SMS to mobile phone")
+
+    inp = input('Proceed y/n? ')
+    if inp.upper() == 'Y':
+
+        hive_auth = HiveAuth.HiveAuth(
+            username=AUTH_DATA["HIVE_USERNAME"],
+            password=AUTH_DATA["HIVE_PASSWORD"],
+            login_data=get_login_info(),
+        )
+
+        auth_data = hive_auth.login()
+
+        if auth_data.get("ChallengeName") == "SMS_MFA":
+            code = input("Enter your 2FA code: ")
+            auth_data = hive_auth.sms_2fa(code, auth_data)
+
+        if "AuthenticationResult" not in auth_data:
+            LOGGER.error("No AuthenticationResult in auth_data")
+            sys.exit()
+
+        menu = dedent("""
+        Menu:
+        1. List devices
+        2. Forget device
+        3. Register device
+        x. Exit
+        """)
+
+        while True:
+            print(menu)
+            inp = input("Enter option: ")
+            if inp == "1":
+                list_devices(hive_auth, auth_data)
+
+            elif inp == "2":
+                list_devices(hive_auth, auth_data)
+                inp = input("Enter device key to forget: (x to skip) ")
+                if inp != "x":
+                    result = hive_auth.forget_device(
+                        access_token=auth_data["AuthenticationResult"]["AccessToken"],
+                        device_key=inp,
+                    )
+                    print()
+                    print(result)
+
+            elif inp == "3":
+                print("Enter device name to register")
+                inp = input(f"'{DEVICE_ID}' should be used for automation): ")
+                hive_auth.device_registration(device_name=inp)
+                creds = hive_auth.get_device_data()
+                print()
+                print(creds)
+                print(f"\nSaving device credentials to file: {DEVICE_CREDS_FILE}")
+                with open(DEVICE_CREDS_FILE, mode="w", encoding="utf-8") as file:
+                    json.dump(creds, file, indent=4)
+
+            else:
+                break
 
 
 def main():
     """Main Prog"""
-    # Create the cognitor manager object
-    # cog_mgr = CogManager()
-    # cog_mgr.initial_auth()
 
-    initial_auth = False
-    inp = input("Do you want to create new tokens y/n: ")
-    if inp.upper() == "Y":
-        initial_auth = True
-    acct = Account(AUTH_DATA, initial_auth=initial_auth)
-    print(acct)
+    menu = dedent("""
+        Menu:
+        1. Manage device registration with 2FA
+        2. Using registered device: login and print the account details
+        3. Using registered device: turn a device on/off (Luca Bulb)
+        4. Using registered device: arm/disarm alarm (Hallway Keypad)
+        x. Exit
+    """)
 
-    # test_get_set_state(acct)
-    # test_arm_disarm_alarm(acct)
+    while True:
+        print(menu)
+        inp = input("Enter option: ")
+        if inp == "1":
+            registration_menu()
+        elif inp == "2":
+            acct = Account(auth_data=AUTH_DATA)
+            print(acct)
+        elif inp == "3":
+            acct = Account(auth_data=AUTH_DATA)
+            test_get_set_state(acct)
+        elif inp == "4":
+            acct = Account(auth_data=AUTH_DATA)
+            test_arm_disarm_alarm(acct)
+        else:
+            break
 
 
 if __name__ == "__main__":

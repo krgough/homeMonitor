@@ -5,5 +5,6 @@ pytz
 RPi.GPIO
 boto3
 pyquery
+requests
 tabulate
 zeep
