@@ -563,7 +563,7 @@ def main():
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.DEBUG)
 
     THREADS = at.start_serial_threads(port=cfg.HIVE_ZB_PORT,
                                       baud=cfg.ZB_BAUD,
