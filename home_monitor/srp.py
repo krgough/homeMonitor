@@ -358,6 +358,9 @@ class AWSSRP():
     def refresh(self, refresh_token):
         """  Refresh the tokens
         """
+        LOGGER.info("Refreshing tokens...")
+        LOGGER.info("Username: %s", self.username)
+        LOGGER.info("Refresh Token: %s", refresh_token)
         resp = self.client.initiate_auth(
             AuthFlow='REFRESH_TOKEN_AUTH',
             AuthParameters={
