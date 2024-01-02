@@ -506,7 +506,7 @@ class Voice:
         """Play the given voice strings"""
 
         voice_strings = msg if msg else self.strings
-        voice_string = ". ".join(voice_strings) + "."
+        voice_string = " . ".join(voice_strings) + " ."
 
         LOGGER.debug(voice_string)
         # Form the complete command
