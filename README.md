@@ -108,6 +108,29 @@ We have several module that can be used as follows:
 * `test\_delays.yaml.old` - Test data in a yaml file. Rename to remove 'old' to use it.
 * `zigbee\_methods.py` - Module that handles all the interactions with ZigBee devices on the Hive network.
 
+### Text to Speach
+We use `pico2wave` which is part of `libttspico-utils` to generate a .wav file fomr text, we then use `aplay` to play the wav file through an attached speaker.
+
+`pico2wave` Is not available in the raspian apt so we edit `sources.list` tempraraly to include
+the necessary library
+
+```bash
+sudo nano /etc/apt/sources.list
+```
+
+Add the following: 
+
+```bash
+# KG - Uncomment this to allow us to install pico2wave. Run apt update then sudo apt install libttspico-utils  
+#deb [arch=armhf, trusted=yes] http://deb.debian.org/debian bookworm main contrib non-free
+```
+
+Then run the following:
+```bash
+sudo apt update
+sudo apt install libttspico-utils
+```
+
 ### Hot Water RPI Setup
 
 ```bash
