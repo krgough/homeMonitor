@@ -46,7 +46,7 @@ import hive_auth as HiveAuth
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 LOGGER = logging.getLogger(__name__)
 
-DEVICE_CREDS_FILE = os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), ".device_creds.json")
+DEVICE_CREDS_FILE = os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), "../.device_creds.json")
 DEVICE_ID = "Traindcator9000"
 
 URLS = {
@@ -188,9 +188,9 @@ class CogManager:
     def load_device_creds(self, filename=DEVICE_CREDS_FILE) -> None:
         """Load tokens from the token file"""
         if not os.path.exists(filename):
-            LOGGER.error("No token file.  Need to authenticate with 2FA.")
-            LOGGER.error("Run hive.py manually to generate tokens")
-            raise FileNotFoundError("No token file")
+            LOGGER.error("No `%s` file.  Need to authenticate with 2FA.", DEVICE_CREDS_FILE)
+            LOGGER.error("Run hive.py manually to generate device creds file")
+            sys.exit(1)
 
         with open(filename, mode="r", encoding="utf-8") as file:
             self.device_creds.update(json.load(file))
@@ -477,7 +477,7 @@ def test_arm_disarm_alarm(acct):
     assert resp.error is None
 
     # Check the alarm state is "away"
-    time.sleep(3)
+    time.sleep(30)
     acct.update()
     assert keypad["state"] == "FULL_ARMED"
     LOGGER.info("Alarm Sate: %s", keypad["state"])
