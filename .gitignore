@@ -1,8 +1,5 @@
 .DS_Store
-.project
-.pydevproject
-home_monitor/__pycache__/
-home_monitor/udpcomms/__pycache__/
-.vscode/settings.json
-.tokens.json
-tokens.json
+__pycache__
+
+.device_creds.json
+.env

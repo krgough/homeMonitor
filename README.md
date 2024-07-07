@@ -1,10 +1,19 @@
 # homeMonitor
 
-Uses ZigBee USB devices running AT command firmware to monitor and control ZigBee devices in the home. We have a speaker attached to the rPi audio port so that we can use a text to speech to read out train delay and other information.
+homeMonitor is setup to do the following:
+
+1. Monitor train delays on a given route and indicate delays a red alert using a zigbee bulb in the house
+2. Monitor the freezer temperature and indicate an unexpected defrost (blue alert) using a zigbee bulb.
+3. Automatically arm/disarm the Hive ZigBee alarm accoring to a given schedule
+4. Toggle a set of lights on/off if a zigbee button is pressed (single press)
+5. Read out the current train delays if a zigbee button is pressed (double press)
+6. Read out the hot water level and freezer temperature is a zigbee button is pressed (long press)
+
+Uses Hive API commands and ZigBee USB devices running AT command firmware to monitor and control ZigBee devices in the home. We have a speaker attached to the rPi audio port so that we can use a text to speech to read out train delay and other information.
 
 We have a second rPi close the hot water cylinder that monitors temperature sensors on the cylinder. We then make an approximation of the 45'C level in the tank as a percentage. We have a UDP listener running on the rPi that will send the hot-water level on receipt of the command "uwl=?" (usable hot water level)
 
-```
+```bash
                        HIVE_ZIGBEE_USB < zigbee > HIVE DEVICES (Bulbs etc), Freezer Temp Sensor
                      /
                     /
@@ -16,11 +25,11 @@ HOME_MONITOR_RPI - - - ZIGBEE_USB < zigbee > Button
 
 On the home monitoring system we have implemented the following functions that are triggered by presses of the ZigBee button:
 
-*   shortPress on ZigBee button - Toggle sitting room lights on/off
-*   doublePress on ZigBee button - Announce current delays status.
-*   longPress on ZigBee button - Announce the hot water level.
+* shortPress on ZigBee button - Toggle sitting room lights on/off
+* doublePress on ZigBee button - Announce current delays status.
+* longPress on ZigBee button - Announce the hot water level.
 
-```
+```bash
 USAGE: home_monitor.py [-h] [-l] [-b] [-g] [-z] -t to_station -f from_station
 
 Use these command line options:
@@ -38,22 +47,27 @@ Use these command line options:
 -f 'from' stationId     CRS code for station
 ```
 
-### ZigBee USB Setup:
+## Hive API Access Setup
+
+* Create a registered device using `hive.py`.  The device credentials are saved to `home_monitor/.device_creds.json`.  If you already have a registered device and have saved the credentials you can create this file manually
+* Tokens are requested from Hive login api using these credentials.  The tokens are not saved to a file as these are ephemeral and can be requested as required.
+
+## ZigBee USB Setup
 
 We have 2 ZigBee USB devices attached to the rpi:
 
-*   One paired to the Hive network to allow us to send and receive commands on that network
-*   One setup as a co-ordinator for a separate network. We use this to monitor a button (for turning lights on/off)
+* One paired to the Hive network to allow us to send and receive commands on that network
+* One setup as a co-ordinator for a separate network. We use this to monitor a button (for turning lights on/off)
 
 We use our own network for the button because the ZigBee button uses an NXP device and SW stack. This device does not always work correctly when used in a network of SiLabs devices and can drop offline (particularly if routing through another device). Keeping the button on a separate small network seems to keep it online.
 
 To setup the temperature sensor:
 
-*   Pair a USB stick to the Hive network but set the device type to be 0x01 rather than 0x07 (SREG 49 should be set to 0x0001). This stops it appearing as a second hub (co-ordinator).  Note that this USB stick becomes our "HIVE" connected USB and will be plugged into the rPi.  If you need to reset the temp sensor then log into the rPi and connect to this USB using screen and follow the instructions below.
-*   Pair the temperature sensor (door/window sensor) to the Hive network - monitor the USB stick using a serial terminal program during the device pairing. This allows you to capture the node id when it joins.
-*   Set additional pairing and attribute reporting on that sensor as shown below...
+* Pair a USB stick to the Hive network but set the device type to be 0x01 rather than 0x07 (SREG 49 should be set to 0x0001). This stops it appearing as a second hub (co-ordinator).  Note that this USB stick becomes our "HIVE" connected USB and will be plugged into the rPi.  If you need to reset the temp sensor then log into the rPi and connect to this USB using `screen` or `picocom` and follow the instructions below.
+* Pair the temperature sensor (door/window sensor) to the Hive network - monitor the USB stick using a serial terminal program during the device pairing. This allows you to capture the node id when it joins.
+* Set additional pairing and attribute reporting on that sensor as shown below...
 
-```
+```bash
 # Device EUI is reported in the SED message (the device announce)
 # USB node EUI is found using the 'ATI' command
 
@@ -65,36 +79,38 @@ at+bind:{sensor_node_id},3,{sensor_eui},06,0402,{usb_eui},01
 at+cfgrpt:{sensor_node_id},06,0,0402,0,0000,29,0001,012C,0001
 ```
 
-### Configuration
+## Configuration
 
-Config.py contains most of the configuration parameters.
+* `home_monitor/Config.py` Edit this file as required with your configuration parameters for homeMonitor. Schedules, device details etc.
+* `.env` Create a file called `home_monitor/.env` With he required env vars sown below.
+
+Contents of `.env`
+
+```bash
+# KG: National Rail Token for API access
+NATIONAL_RAIL_TOKEN='you-token-here'
+
+# KG: Hive access 
+HIVE_USERNAME='your-hive-username'
+HIVE_PASSWORD='your-hive-password'
+```
+
+## Module Descriptions
 
 We have several module that can be used as follows:
 
-*   home\_monitor.py - The main program. Start this using the startWinToWatTrainMonotor.sh from CRON
-*   gpio\_monitor.py - Monitors a physical switch connection on a gpio line on the rPi. Can use this to trigger reports.
-*   startGpioMonitor.sh - script to check if gpio\_monitor.py is running (Use this from CRON)
-*   button\_listener.py - Listens for incoming commands or attribute reports on the private ZigBee network.
-*   led\_pattern\_generator.py - Generates nice patterns on a Hive Sense LED indicator ring. LED ring needs to be attached via UART to the rPi.
-*   train\_times.py - Use the Huxley API (wraps the Network Rail soap API with a rest API) to get train data.
-*   test\_delays.yaml.old - Test data in a yaml file. Rename to remove 'old' to use it.
-*   zigbee\_methods.py - Module that handles all the interactions with ZigBee devices on the Hive network.
-
-/etc/environment - Contains the env vars required
-
-```
-# KG: National Rail Token for API access
-export NATIONAL_RAIL_TOKEN='token-here-keep-quotes'
-# KG: Token for pathname to token.file for hive api calls.
-export HIVE_API_PATH='/home/pi/repositories/apiLogger/'
-# KG: Hive Access
-export HIVE_USERNAME=<hive-username>
-export HIVE_PASSWORD=<hive-password>
-```
+* `home\_monitor.py` - The main program. Start this using the startWinToWatTrainMonotor.sh from CRON
+* `gpio\_monitor.py` - Monitors a physical switch connection on a gpio line on the rPi. Can use this to trigger reports.
+* `startGpioMonitor.sh` - script to check if gpio\_monitor.py is running (Use this from CRON)
+* `button\_listener.py` - Listens for incoming commands or attribute reports on the private ZigBee network.
+* `led\_pattern\_generator.py` - Generates nice patterns on a Hive Sense LED indicator ring. LED ring needs to be attached via UART to the rPi.
+* `train\_times.py` - Use the Huxley API (wraps the Network Rail soap API with a rest API) to get train data.
+* `test\_delays.yaml.old` - Test data in a yaml file. Rename to remove 'old' to use it.
+* `zigbee\_methods.py` - Module that handles all the interactions with ZigBee devices on the Hive network.
 
 ### Hot Water RPI Setup
 
-```
+```bash
 # Clone the telemetry repo and then setup CRON to read the temperature values and run the UDP listener (server).
 git clone https://github.com/krgough/telemetryModule.git
 

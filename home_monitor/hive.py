@@ -3,6 +3,17 @@
 
 Hive Api - Get and set device parameters using the Hive API
 
+We need to resgister a device with Hive/cognito to get the device
+credentials so we can make api calls.  This is done by logging in with 2FA
+and then registering a device. he device credentials are saved to a file and
+used to request tokens - we then have a set of ephemeral tokens that can be
+used to make api calls.
+
+Device credentials are saved to `.device_creds.json`
+We can register and de-register devices using this script.
+When we register a device a one time MFA code is sent via sms to the
+registered mobile phone.  We use this code to complete the registration.
+
 See some details from these sites:
 https://jedkirby.com/blog/hive-home-rest-api
 https://github.com/Pyhass/Pyhiveapi/blob/master/pyhiveapi/apyhiveapi/api/hive_api.py

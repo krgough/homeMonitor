@@ -1,7 +1,8 @@
 """
-Created on 21 Aug 2016
 
-@author: keith
+Configuration file for home_monitor
+Set your devices/schedules and other parameters here.
+
 """
 import datetime
 import pytz
@@ -24,28 +25,26 @@ LED_PORT = "/dev/ttyS0"
 LED_BAUD = 115200
 GPIO_CHANNEL = 4
 
-# Zigbee dongles need to be named properly so we don't confuse the two.
-# The names (USB0, USB1) get assigned randomly at boot so we need to
-# discover them using their serial numbers and then create symlinks to
-# the device in /dev.  We do this using udevadm as follows...
 
-# Add the following rules to create symlinks to the correct dongles in /dev
-# Edit /etc/udev/rules.d/nano 99-com.rules to include the lines shown.
-# The links will then be setup at boot or with the following command
-# sudo udevadm trigger
-# To discover the device serial numbers use the following command
-# udevadm info --name=/dev/ttyUSB0 --attribute-walk | grep serial
-# SUBSYSTEM=="tty", ATTRS{serial}=="01001DAD", SYMLINK+="BUTTON_DONGLE"
-# SUBSYSTEM=="tty", ATTRS{serial}=="04000A0B", SYMLINK+="HIVE_DONGLE"
-ZB_PORT = "/dev/BUTTON_DONGLE"
-HIVE_ZB_PORT = "/dev/HIVE_DONGLE"
-HIVE_EUI = "000D6F000C44F290"
+# Zigbee dongles need to be named properly so we don't confuse the two.
+# The names (USB0, USB1) get assigned randomly at boot so we need to use
+# the /dev/serial/by-id/ path to correctly identify the dongles.
+
 ZB_BAUD = 115200
 
+# Zigbee Dongle for Button Network
+ZB_PORT = "/dev/serial/by-id/usb-Silicon_Labs_Telegesis_USB_Device_01001DAD-if00-port0"
 BUTTON_NODE_ID = "7967"  # Black Button
 
+# Zigbee Dongle for Hive Network
+HIVE_ZB_PORT = "/dev/serial/by-id/usb-Silicon_Labs_Telegesis_USB_Device_04000A0B-if00-port0"
+HIVE_EUI = "000D6F000C44F290"
+
+# This is the group we turn on/off with the button press
 SITT_GROUP = ["Sitt Front", "Sitt Rear", "Sitt Colour"]
 
+
+# Sitt Colour is the indicator bulb for the train delay or freezer alerts
 DEVS = {
     "Sitt Colour": {"eui": "00158D00012E2189", "ep": "01"},
     "Sitt Front": {"eui": "00158D00012E2CF1", "ep": "01"},
@@ -55,8 +54,6 @@ DEVS = {
     "Garage Plug": {"eui": "001E5E09020DA01E", "ep": "09"},
     "Temperature Sensor": {"eui": "00124B000DEF311B", "ep": "06"},
 }
-
-# pylint: disable=invalid-name
 
 
 def get_dev(dev_name):
