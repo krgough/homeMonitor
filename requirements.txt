@@ -1,11 +1,11 @@
-dotenv
-Pyyaml
-pyserial
-/home/pi/repositories/zigbeetools/dist/zigbeetools-1.0.0.tar.gz
-pytz
-RPi.GPIO
 boto3
+python-dotenv
 pyquery
+pyserial
+pytz
+Pyyaml
 requests
+RPi.GPIO
 tabulate
+/home/pi/repositories/zigbeetools/dist/zigbeetools-1.0.0.tar.gz
 zeep
