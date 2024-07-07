@@ -11,7 +11,7 @@ import threading
 
 import zigbeetools.threaded_serial as at
 
-import config as cfg
+import home_monitor.config as cfg
 
 LOGGER = logging.getLogger(__name__)
 RETRY_TIMEOUT = 0.5

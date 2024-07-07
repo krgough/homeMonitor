@@ -41,7 +41,7 @@ import pyquery
 import requests
 from tabulate import tabulate
 
-import hive_auth as HiveAuth
+import home_monitor.hive_auth as HiveAuth
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 LOGGER = logging.getLogger(__name__)

@@ -6,7 +6,7 @@ Created on 21 Feb 2021
 """
 import time
 import logging
-import config as cfg
+import home_monitor.config as cfg
 
 LOGGER = logging.getLogger(__name__)
 

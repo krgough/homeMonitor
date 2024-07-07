@@ -3,6 +3,8 @@
 Configuration file for home_monitor
 Set your devices/schedules and other parameters here.
 
+COPY THIS FILE TO `config.py` and edit that version.
+
 """
 import datetime
 import pytz
@@ -33,11 +35,13 @@ GPIO_CHANNEL = 4
 ZB_BAUD = 115200
 
 # Zigbee Dongle for Button Network
-ZB_PORT = "/dev/serial/by-id/usb-Silicon_Labs_Telegesis_USB_Device_01001DAD-if00-port0"
+# ZB_PORT = "/dev/serial/by-id/usb-Silicon_Labs_Telegesis_USB_Device_01001DAD-if00-port0"
+ZB_PORT = "/dev/serial/by-path/platform-fd500000.pcie-pci-0000:01:00.0-usb-0:1.2:1.0-port0"
 BUTTON_NODE_ID = "7967"  # Black Button
 
 # Zigbee Dongle for Hive Network
-HIVE_ZB_PORT = "/dev/serial/by-id/usb-Silicon_Labs_Telegesis_USB_Device_04000A0B-if00-port0"
+# HIVE_ZB_PORT = "/dev/serial/by-id/usb-Silicon_Labs_Telegesis_USB_Device_04000A0B-if00-port0"
+HIVE_ZB_PORT = "/dev/serial/by-path/platform-fd500000.pcie-pci-0000:01:00.0-usb-0:1.3:1.0-port0"
 HIVE_EUI = "000D6F000C44F290"
 
 # This is the group we turn on/off with the button press

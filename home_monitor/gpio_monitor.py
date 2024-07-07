@@ -18,7 +18,7 @@ import logging
 
 from RPi import GPIO  # @UnresolvedImport
 
-from home_monitor import Voice
+from home_monitor.voice import Voice
 
 LOGGER = logging.getLogger(__name__)
 
@@ -61,17 +61,24 @@ def main(voice_strings):
     # cb = lambda channel, arg1=valueToPass: functionToCall(arg1)
     callback = lambda channel, vs=voice_strings: my_callback(channel, vs)
 
-    GPIO.add_event_detect(GPIO_CHANNEL,
-                          GPIO.RISING,
-                          callback=callback,
-                          bouncetime=2000)
+    GPIO.add_event_detect(
+        GPIO_CHANNEL,
+        GPIO.RISING,
+        callback=callback,
+        bouncetime=2000
+    )
 
     while True:
         time.sleep(100)
 
 
+def test():
+    """Run a test"""
+    voice_strings = Voice()
+    voice_strings.strings = ['This is a test.']
+    main(voice_strings)
+
+
 if __name__ == "__main__":
-    VOICE_STRINGS = Voice()
-    VOICE_STRINGS.strings = ['This is a test.']
     logging.basicConfig(level=logging.DEBUG)
-    main(VOICE_STRINGS)
+    test()

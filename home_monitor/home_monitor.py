@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+
 """
 Created on 7 Nov 2018
 
@@ -28,20 +29,21 @@ import re
 from textwrap import dedent
 import logging.config
 
-from udpcomms import hex_temp
-import udpcomms.hot_water_udp_client as udp_cli
+from home_monitor.udpcomms import hex_temp
+from home_monitor.udpcomms import hot_water_udp_client as udp_cli
 import zigbeetools.threaded_serial as at
 
-import train_times2 as tt
-import led_pattern_generator as led
-import button_listener as bl
-import config as cfg
-import hive_alarm
+from home_monitor import train_times2 as tt
+import home_monitor.led_pattern_generator as led
+import home_monitor.button_listener as bl
+import home_monitor.config as cfg
+from home_monitor import hive_alarm
 
 # import api_methods as api  # old hive API's (now closed down)
-import zigbee_methods as api  # Control using Zigbee AT commands
-import gpio_monitor as gm
-import freezer_alarm_fsm as fsm
+import home_monitor.zigbee_methods as api  # Control using Zigbee AT commands
+import home_monitor.gpio_monitor as gm
+import home_monitor.freezer_alarm_fsm as fsm
+from home_monitor.voice import Voice
 
 CHECK_THREAD_STOP = threading.Event()
 THREAD_POOL = []
@@ -126,8 +128,7 @@ def get_args():
 def configure_logger(logger_name, log_path=None):
     """Logger configuration function
 
-    If log_path given then log to console and to the file
-    else to console only.
+    If log_path given then log to the file else to console only.
     """
     version = 1
     disable_existing_loggers = False
@@ -185,23 +186,10 @@ def configure_logger(logger_name, log_path=None):
     return logging.getLogger(logger_name)
 
 
-def timestamp_from_time_string(time_string):
-    """Takes a time_string of the form HH:MM and returns seconds"""
-    hours, minutes = time_string.split(":")
-    seconds = (int(hours) * 60 * 60) + (int(minutes) * 60)
-    return seconds
-
-
 def flush_queue(my_queue):
     """Flush the given queue"""
     while not my_queue.empty():
         my_queue.get()
-
-
-# Train functions
-def get_station_name(crs_code):
-    """Get the station name for the given crs code"""
-    return tt.get_station_name(crs_code)
 
 
 def check_for_delays(args, voice_strings):
@@ -451,76 +439,6 @@ def button_press_handler(button_press_queue, hive_indication, voice_strings):
         time.sleep(0.1)
 
 
-class Voice:
-    """Class for creating and playing voice announcements"""
-
-    def __init__(self):
-        self.strings = []
-
-    def build_voice_string(self, delays, from_station, to_station):
-        """Build the voice strings"""
-        self.strings = []
-        for delay in delays:
-            to_station = get_station_name(delay["to"])
-            from_station = get_station_name(delay["from"])
-
-            voice_string = (
-                f"The {delay['std']} from {from_station} to {to_station}, is "
-            )
-
-            if delay["isCancelled"]:
-                if delay["cancelReason"]:
-                    voice_string += f"cancelled. {delay['cancelReason']}."
-                else:
-                    voice_string += "cancelled."
-            else:
-                voice_string += "delayed"
-
-                try:
-                    etd = timestamp_from_time_string(delay["etd"])
-                    std = timestamp_from_time_string(delay["std"])
-                    delay_time = int((etd - std) / 60)
-                # ValueError can occur if there's no colon in the time HH:MM
-                # AttributeError occurs if any vars are None
-                except (ValueError, AttributeError):
-                    LOGGER.error("Could not parse etd|std from the delay")
-                    LOGGER.error(delay)
-                    delay_time = None
-
-                if delay_time:
-                    voice_string += f" by {delay_time} minutes."
-
-                if delay["delayReason"]:
-                    voice_string += f". {delay['delayReason']}."
-
-            self.strings.append(voice_string)
-
-        # Null voice string for no-delays situation
-        if not delays:
-            voice_string = "No delays listed for trains from {} to {}."
-            self.strings.append(
-                voice_string.format(
-                    get_station_name(from_station), get_station_name(to_station)
-                )
-            )
-
-    def play(self, msg=None):
-        """Play the given voice strings"""
-
-        voice_strings = msg if msg else self.strings
-        voice_string = " . ".join(voice_strings) + " ."
-
-        LOGGER.debug(voice_string)
-        # Form the complete command
-        temp_voice_file = "/tmp/voicefile.wav"
-        cmd = "pico2wave -l en-GB -w {tvf} '{vs}' && aplay {tvf} &".format(
-            tvf=temp_voice_file, vs=voice_string
-        )
-
-        my_pipe = os.popen(cmd, "w")
-        my_pipe.close()
-
-
 def check_usb_dongles():
     """Check we have symlinks to correct USB devices in /dev.
     See config.py for instaructions on how to set these up using udevadm.
@@ -530,7 +448,7 @@ def check_usb_dongles():
     for dongle in dongles:
         if not os.path.exists(dongle):
             msg = (
-                "Dongle port {dongle} does not exist. See config.py "
+                f"Dongle port {dongle} does not exist. See config.py "
                 "for instructions on how to configure"
             )
             LOGGER.error(msg)
@@ -553,6 +471,7 @@ def main():
 
     # First check the ZigBee USB dongles are mapped to symlinks in /dev
     if not check_usb_dongles():
+        print("ERROR: Zigbee dongle issue. Check logs for details")
         sys.exit()
 
     args = get_args()

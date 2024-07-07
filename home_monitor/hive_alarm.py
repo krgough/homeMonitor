@@ -12,8 +12,8 @@ relevant state change command to Hive.  We don't check if it works.
 """
 import logging
 
-import config as cfg
-import hive
+import home_monitor.config as cfg
+from home_monitor import hive
 
 LOGGER = logging.getLogger(__name__)
 

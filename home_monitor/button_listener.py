@@ -32,7 +32,7 @@ import re
 import logging
 import serial
 
-from udpcomms import hex_temp
+from home_monitor.udpcomms import hex_temp
 
 LOGGER = logging.getLogger(__name__)
 ZIGBEE_DEBUG = False
