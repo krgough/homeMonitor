@@ -4,3 +4,4 @@ __pycache__
 .device_creds.json
 .env
 venv
+.vscode/
