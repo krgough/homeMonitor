@@ -82,7 +82,7 @@ at+cfgrpt:{sensor_node_id},06,0,0402,0,0000,29,0001,012C,0001
 ## Configuration
 
 * `home_monitor/Config.py` Edit this file as required with your configuration parameters for homeMonitor. Schedules, device details etc.
-* `.env` Create a file called `home_monitor/.env` With he required env vars sown below.
+* `.env` Create a file called `.env` With he required env vars sown below.
 
 Contents of `.env`
 
