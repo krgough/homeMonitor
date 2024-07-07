@@ -37,6 +37,7 @@ import logging
 import sys
 from textwrap import dedent
 
+import dotenv
 from io import StringIO
 import os
 import requests
@@ -44,10 +45,11 @@ from tabulate import tabulate
 from zeep import Client, Settings, xsd
 
 LOGGER = logging.getLogger(__name__)
-NATIONAL_RAIL_TOKEN_NAME = "NATIONAL_RAIL_TOKEN"
+
+dotenv.load_dotenv()
 
 try:
-    ACCESS_TOKEN = os.environ[NATIONAL_RAIL_TOKEN_NAME]
+    ACCESS_TOKEN = os.environ["NATIONAL_RAIL_TOKEN"]
     # API_TOKEN_PATH = os.environ['HIVE_API_PATH']
 except KeyError:
     print(dedent(f"""

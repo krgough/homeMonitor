@@ -47,6 +47,8 @@ CHECK_THREAD_STOP = threading.Event()
 THREAD_POOL = []
 DELAY_CHECK_SLEEP_TIME = 5 * 60
 
+LOGGER = logging.getLogger(__name__)
+
 
 def get_args():
     """Read command line parameters"""

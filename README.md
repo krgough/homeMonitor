@@ -87,10 +87,10 @@ at+cfgrpt:{sensor_node_id},06,0,0402,0,0000,29,0001,012C,0001
 Contents of `.env`
 
 ```bash
-# KG: National Rail Token for API access
+# National Rail Token for API access
 NATIONAL_RAIL_TOKEN='you-token-here'
 
-# KG: Hive access 
+# Hive Credentials 
 HIVE_USERNAME='your-hive-username'
 HIVE_PASSWORD='your-hive-password'
 ```
