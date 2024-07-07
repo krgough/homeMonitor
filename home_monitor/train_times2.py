@@ -34,26 +34,25 @@ https://github.com/openraildata/openldbws-example-python/blob/main/getDepartureB
 from argparse import ArgumentParser
 import csv
 import logging
+import os
 import sys
 from textwrap import dedent
 
-import dotenv
-from io import StringIO
-import os
+from dotenv import load_dotenv
 import requests
 from tabulate import tabulate
 from zeep import Client, Settings, xsd
 
 LOGGER = logging.getLogger(__name__)
 
-dotenv.load_dotenv()
+load_dotenv()
 
 try:
     ACCESS_TOKEN = os.environ["NATIONAL_RAIL_TOKEN"]
     # API_TOKEN_PATH = os.environ['HIVE_API_PATH']
 except KeyError:
     print(dedent(f"""
-    ERROR: Enviroment variable {NATIONAL_RAIL_TOKEN_NAME} is not set.
+    ERROR: Enviroment variable {"NATIONAL_RAIL_TOKEN_NAME"} is not set.
     Get a token here:
     https://realtime.nationalrail.co.uk/OpenLDBWSRegistration/Registration
     Put it in an environment variable...
@@ -172,7 +171,10 @@ def refresh_crs_codes_csv():
     is in multiple columns and there is at least one station name
     that contains commas
     """
-    req = requests.get("https://www.nationalrail.co.uk/station_codes%20(07-12-2020).csv")
+    req = requests.get(
+        url="https://www.nationalrail.co.uk/station_codes%20(07-12-2020).csv",
+        timeout=60
+    )
     file = StringIO(req.text)
     reader = csv.reader(file, delimiter=',')
 

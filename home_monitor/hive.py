@@ -36,7 +36,7 @@ import time
 from textwrap import dedent
 import urllib3
 
-import dotenv
+from dotenv import load_dotenv
 import pyquery
 import requests
 from tabulate import tabulate
@@ -61,7 +61,7 @@ URLS = {
 
 SITT_REAR_PLUG_ID = "61a8564c-1035-476a-9b46-3411cf75a0a2"
 
-dotenv.load_dotenv()
+load_dotenv()
 
 # Load the env vars
 AUTH_DATA = {
