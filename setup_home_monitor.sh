@@ -21,7 +21,7 @@ python3 -m pip install -q -r requirements.txt
 # Create a systemd service file for the secure tunnel manager with correct path names
 echo "Creating home_monitor.servce file"
 path=$(pwd)
-cmd="$path/venv/bin/python3 -m home_monitor.home_monitor -f win -t wat -zba"
+cmd="$path/venv/bin/python3 -m home_monitor.home_monitor_main -f win -t wat -zba"
 cat > "home_monitor.service"<< EOF
 [Unit]
 Description=Train-d-cator home_monitor service

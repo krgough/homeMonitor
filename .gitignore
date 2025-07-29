@@ -5,3 +5,4 @@ __pycache__
 .env
 venv
 .vscode/
+home_monitor/config.py
