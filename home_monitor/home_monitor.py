@@ -13,11 +13,9 @@ by setting a Hive colour bulb to e.g. RED and ON.
 User can then use an associated ZigBee button to trigger a voice announcement
 for the delayed train services.
 
-25/11/2019 Keith Gough
-PEP8 Updates.
+25/11/2019 Keith Gough - PEP8 Updates.
 
 """
-
 
 import os
 import sys
@@ -33,13 +31,12 @@ from home_monitor.udpcomms import hex_temp
 from home_monitor.udpcomms import hot_water_udp_client as udp_cli
 import zigbeetools.threaded_serial as at
 
-from home_monitor import train_times2 as tt
+from home_monitor import train_times as tt
 import home_monitor.led_pattern_generator as led
 import home_monitor.button_listener as bl
 import home_monitor.config as cfg
 from home_monitor import hive_alarm
 
-# import api_methods as api  # old hive API's (now closed down)
 import home_monitor.zigbee_methods as api  # Control using Zigbee AT commands
 import home_monitor.gpio_monitor as gm
 import home_monitor.freezer_alarm_fsm as fsm
@@ -220,9 +217,7 @@ def check_for_delays(args, voice_strings):
         #                               led.colours.GREEN_DIM)
 
         # Get the delay data
-        delays = tt.get_delays(
-            args["from_station"], args["to_station"],
-        )
+        delays = tt.get_delays(args["from_station"], args["to_station"])
 
         for delay in delays:
             LOGGER.debug(delay)
@@ -243,9 +238,7 @@ def check_for_delays(args, voice_strings):
 
         # Build voice strings for audio announcements and save in a file
         # We'll play these if a user presses the zigbee button
-        voice_strings.build_voice_string(
-            delays, args["from_station"], args["to_station"]
-        )
+        voice_strings.build_voice_string(delays, args["from_station"], args["to_station"])
 
         # Check and set alarm state according to schedule
         if args["set_alarm"]:
@@ -334,10 +327,7 @@ def button_press(cmd, sitt_group, freezer_sensor, voice_strings):
         elif cmd["msgCode"] == "10":
             LOGGER.info("Button Long Press: Playing msg")
 
-            uwl = udp_cli.send_cmd(
-                udp_cli.UWL_MESSAGE, udp_cli.UWL_RESP, udp_cli.ADDRESS
-            )
-
+            uwl = udp_cli.send_cmd(udp_cli.UWL_MESSAGE, udp_cli.UWL_RESP, udp_cli.ADDRESS)
             hw_msg = f"Hot water is at {uwl}"
 
             freezer_sensor.long_press_received = True
