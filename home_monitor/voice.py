@@ -6,7 +6,7 @@ Voice Class used by multiple other modules so placed here so both can import.
 import logging
 import os
 
-from home_monitor import train_times2 as tt
+from home_monitor import train_times as tt
 
 LOGGER = logging.getLogger(__name__)
 

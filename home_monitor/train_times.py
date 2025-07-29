@@ -33,6 +33,7 @@ https://github.com/openraildata/openldbws-example-python/blob/main/getDepartureB
 """
 from argparse import ArgumentParser
 import csv
+from io import StringIO
 import logging
 import os
 import sys
