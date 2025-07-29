@@ -9,7 +9,6 @@ import logging
 import time
 import zigbeetools.threaded_serial as at
 
-
 LOGGER = logging.getLogger(__name__)
 
 

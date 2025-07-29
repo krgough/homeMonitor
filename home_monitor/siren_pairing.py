@@ -96,11 +96,10 @@ def get_node_eui(node_id):
 
 
 def active_endpoint_request(node_id):
-    """  Get the device endpoints
-    """
+    """  Get the device endpoints """
     resp_state, resp_code, endpoints = at_cmd.disc_endpoints(node_id)
     if resp_state and resp_code == zcl.STATUS_CODES['SUCCESS']:
-        print("Endpoints: {0}".format(endpoints))
+        print(f"Endpoints: {endpoints}")
     else:
         print('Error finding endpoints')
         sys.exit()
@@ -108,27 +107,23 @@ def active_endpoint_request(node_id):
 
 
 def simple_descriptor_request(node_id, ep_id):
-    """ Send simple descriptor request
-    """
+    """ Send simple descriptor request """
     node = at_cmd.NodeObj(node_id, ep_id, manuf_id=None)
     resp_state, resp_code, resp_value = at_cmd.get_simple_desc(node)
     if resp_state and resp_code == zcl.STATUS_CODES['SUCCESS']:
-        print("\nSimple Descriptor, Endpoint={}:".format(ep_id))
+        print(f"\nSimple Descriptor, Endpoint={ep_id}:")
         for field in ['ProfileID', 'DeviceID', 'InCluster', 'OutCluster']:
             if field == 'DeviceID':
                 device_type = zcl.get_device_type(resp_value[field])
                 if device_type is None:
-                    print(("DEVICE TYPE NOT LISTED IN ZCL. "
-                          "{}").format(resp_value[field]))
+                    print("DEVICE TYPE NOT LISTED IN ZCL. {resp_value[field]}")
                 else:
-                    print("{:10} = {}. {}".format(field,
-                                                  resp_value[field],
-                                                  device_type))
+                    print(f"{field:10} = {resp_value[field]}. {device_type}")
             else:
-                print("{:10} = {}".format(field, resp_value[field]))
+                print(f"{field:10} = {resp_value[field]}")
 
     else:
-        print("get_simple_desc Error: {}".format(resp_value))
+        print(f"get_simple_desc Error: {resp_value}")
         sys.exit()
 
 
@@ -138,23 +133,19 @@ def node_descriptor_request(node_id):
     resp_state, resp_code, resp_value = at_cmd.get_node_desc(node_id, node_id)
     if resp_state and resp_code == zcl.STATUS_CODES['SUCCESS']:
         print(resp_value)
-        print("""\nNode type = {}, """
-              """Manufacturer Id = {}""".format(resp_value['type'],
-                                                resp_value['manId']))
+        print(f"\nNode type = {resp_value['type']}, Manufacturer Id = {resp_value['manId']}")
     else:
         print(resp_value)
         sys.exit()
 
 
 def hex_str(value, digits=2):
-    """ Convert to a hex string
-    """
-    return "{:0{}x}".format(value, digits)
+    """ Convert to a hex string """
+    return f"{value:0{digits}x}"
 
 
 def flush_queue(my_queue):
-    """ Flush the given Queue
-    """
+    """ Flush the given Queue """
     while not my_queue.empty():
         my_queue.get()
 
@@ -188,7 +179,7 @@ def initialise_siren(node_id):
 
     # Messages to be sent
     # Set EUI of CICIE
-    set_cicie = "at+writeatr:{},01,0,0500,0010,F0,{}".format(node_id, coo_eui)
+    set_cicie = f"at+writeatr:{node_id},01,0,0500,0010,F0,{coo_eui}"
     # setPolBinding = "at+bind:{},3,{},01,0020,{},01".format(node_id,
     #                                                        dev_eui,
     #                                                        coo_eui)
@@ -232,7 +223,7 @@ def siren(node_id, initialise):
 
 
 def get_siren_node_id():
-    """ Open the network to allow the siren to join"""
+    """ Open the network to allow the siren to join """
 
     # Open the network to allow the siren to join
     at_cmd.pjoin(duration=120)
@@ -241,14 +232,13 @@ def get_siren_node_id():
     result = at_cmd.wait_for_message(msgs=["FFD:"], timeout=120)
     if result:
         node_id = result.split(",")[1]
-    print(result, node_id)
-
+    else:
+        node_id = None
     return node_id
 
 
 def main():
-    """ Main program
-    """
+    """ Main program """
 
     args = get_args()
     node_id = args.node_id

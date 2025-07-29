@@ -682,7 +682,6 @@ def show_pattern(pattern, colour, debug=False):
 def main():
     """Main Program"""
     port, baud, pattern, colour, debug = read_args()
-    exit(1)
 
     if not debug:
         logging.basicConfig(level=logging.INFO)
