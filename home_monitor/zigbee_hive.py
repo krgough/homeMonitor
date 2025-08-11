@@ -3,6 +3,10 @@
 Created on 08-Oct-2020
 
 @author: Keith.Gough
+
+This module uses the `at` commands on the dongle which is connected to the Hive Network
+to control the devices on the Hive network and to get state info from the devices.
+
 '''
 
 import logging
@@ -24,7 +28,8 @@ class OnOffObject:
     # Only one instance at a time can send/receive commands
     lock = threading.RLock()
 
-    def __init__(self, dev):
+    def __init__(self, coordinator: at.ZigbeeDevice, dev):
+        self.coordinator = coordinator
         self.name = dev['name']
         self.eui = dev['eui']
         self.ep_id = dev['ep']
@@ -34,15 +39,14 @@ class OnOffObject:
     def exec_zb_cmd(self, zb_func, *args):
         """ Wrapper for at commands
 
-            In order to handle offline devices or other command failures
-            we wrap the zigbee command calls with this handler.
+            In order to handle offline devices or other command failures we wrap the
+            zigbee command calls with this handler.
 
-            If we have no node_id then we try to find one before executing
-            the command.
+            If we have no node_id then we try to find one before executing the command.
 
-            If a command fails then device is either offline or node_id has
-            changed so we set node_id to None and fail gracefully so that the
-            next command call results in us trying to find the node_id again.
+            If a command fails then device is either offline or node_id has changed so
+            we set node_id to None and fail gracefully so that the next command call
+            results in us trying to find the node_id again.
 
         """
         # If node is not initialised then try to find the node_id and setup
@@ -53,7 +57,7 @@ class OnOffObject:
         with self.lock:
             if self.node is None:
                 LOGGER.info("Renewing node_id for %s", self.name)
-                resp_state, _, resp_value = at.get_id(self.eui, RETRY_TIMEOUT)
+                resp_state, _, resp_value = self.coordinator.at_cmds.get_id(self.eui)
 
                 if resp_state:
                     self.node_id = resp_value
@@ -78,14 +82,10 @@ class OnOffObject:
         return resp_value
 
     def get_on_state(self):
-        """ Get the on/off state of the device
-        """
+        """ Get the on/off state of the device """
         cluster = at.cluster_object("On/Off Cluster", 'server')
         attribute = at.attribute_object("On/Off Cluster", "onOff")
-        resp_value = self.exec_zb_cmd(at.get_attribute,
-                                      cluster,
-                                      attribute,
-                                      RETRY_TIMEOUT)
+        resp_value = self.exec_zb_cmd(self.coordinator.at_cmds.get_attribute, cluster, attribute)
 
         if resp_value is None:
             LOGGER.error('Error in get_on_state(). %s', self.name)
@@ -106,10 +106,7 @@ class OnOffObject:
         # Turn bulb on/off
         send_mode = 0
         state = int(state)
-        resp_value = self.exec_zb_cmd(at.on_off,
-                                      send_mode,
-                                      state,
-                                      RETRY_TIMEOUT)
+        resp_value = self.exec_zb_cmd(self.coordinator.at_cmds.on_off, send_mode, state)
         if resp_value is None:
             LOGGER.error("Error in set_on_off(). %s", self.name)
             return None
@@ -117,10 +114,10 @@ class OnOffObject:
 
 
 class BulbObject(OnOffObject):
-    """ Class for managing bulb objects
-    """
-    def __init__(self, dev):
-        super().__init__(dev)
+    """ Class for managing bulb objects """
+
+    def __init__(self, coordinator, dev):
+        super().__init__(coordinator, dev)
 
         # If the bulb is red when we are initialising then likely this means we
         # crashed out and left it red so we make set the alert state now and it
@@ -128,14 +125,10 @@ class BulbObject(OnOffObject):
         self.alert_active = self.is_red()
 
     def get_color_mode(self):
-        """ Find out if bulb is in colour mode or in white mode
-        """
+        """ Find out if bulb is in colour mode or in white mode """
         cluster = at.cluster_object("Color Control Cluster", "server")
         attribute = at.attribute_object("Color Control Cluster", "colorMode")
-        resp_value = self.exec_zb_cmd(at.get_attribute,
-                                      cluster,
-                                      attribute,
-                                      RETRY_TIMEOUT)
+        resp_value = self.exec_zb_cmd(self.coordinator.at_cmds.get_attribute, cluster, attribute)
 
         if resp_value is None:
             LOGGER.error("Error getting COLOR_MODE")
@@ -154,10 +147,7 @@ class BulbObject(OnOffObject):
         """
         cluster = at.cluster_object("Color Control Cluster", "server")
         attribute = at.attribute_object("Color Control Cluster", "currentHue")
-        resp_value = self.exec_zb_cmd(at.get_attribute,
-                                      cluster,
-                                      attribute,
-                                      RETRY_TIMEOUT)
+        resp_value = self.exec_zb_cmd(self.coordinator.at_cmds.get_attribute, cluster, attribute)
 
         if resp_value is None:
             LOGGER.error("Error getting currentHue")
@@ -169,15 +159,11 @@ class BulbObject(OnOffObject):
         return resp_value
 
     def get_colour_temp(self):
-        """ Retrieve the colour temperature value (mireds)
-        """
+        """ Retrieve the colour temperature value (mireds) """
         cluster = at.cluster_object("Color Control Cluster", "server")
         attribute = at.attribute_object(
             "Color Control Cluster", "colorTemperature")
-        resp_value = self.exec_zb_cmd(at.get_attribute,
-                                      cluster,
-                                      attribute,
-                                      RETRY_TIMEOUT)
+        resp_value = self.exec_zb_cmd(self.coordinator.at_cmds.get_attribute, cluster, attribute)
         if resp_value is None:
             LOGGER.error("Error getting colourTemperature")
             return None
@@ -193,15 +179,11 @@ class BulbObject(OnOffObject):
         return colour_temp
 
     def get_level(self):
-        """ Retrieve the brightness level
-        """
+        """ Retrieve the brightness level """
         cluster = at.cluster_object("Level Control Cluster", "server")
         attribute = at.attribute_object(
             "Level Control Cluster", "currentLevel")
-        resp_value = self.exec_zb_cmd(at.get_attribute,
-                                      cluster,
-                                      attribute,
-                                      RETRY_TIMEOUT)
+        resp_value = self.exec_zb_cmd(self.coordinator.at_cmds.get_attribute, cluster, attribute)
         if resp_value is None:
             LOGGER.error("Error getting currentLevel")
             return None
@@ -211,22 +193,16 @@ class BulbObject(OnOffObject):
         return resp_value
 
     def get_state(self):
-        """ Return bulb state
-        """
+        """ Return bulb state """
 
         # Get the on_off state, colour mode, colour and brightness
-        on_off_state = self.get_on_state()
-        colour_mode = self.get_color_mode()
-        hue = self.get_hue()
-        colour_temp = self.get_colour_temp()
-        brightness = self.get_level()
-
-        resp = {'state': on_off_state,
-                'c_mode': colour_mode,
-                'hue': hue,
-                'c_temp': colour_temp,
-                'value': brightness
-                }
+        resp = {
+            'state': self.get_on_state(),
+            'c_mode': self.get_color_mode(),
+            'hue': self.get_hue(),
+            'c_temp': self.get_colour_temp(),
+            'value': self.get_level()
+        }
 
         # If any of the above fail then return None
         fails = ", ".join([item[0] for item in resp.items() if item[1] is None])
@@ -239,11 +215,13 @@ class BulbObject(OnOffObject):
     def set_state(self, attrs):
         """ Set the given state
             attrs is a dict as follows:
-                {'state': on_off_state,
-                'c_mode': colour_mode,
-                'hue': hue,
-                'c_temp': colour_temp,
-                'value': brightness)
+                {
+                    'state': on_off_state,
+                    'c_mode': colour_mode,
+                    'hue': hue,
+                    'c_temp': colour_temp,
+                    'value': brightness
+                }
         """
         if attrs is None:
             LOGGER.error("Cannot set state.  Attrs are NONE")
@@ -264,12 +242,13 @@ class BulbObject(OnOffObject):
         """
         send_mode = 0
         sat = 'FE'  # Max saturation
-        resp_value = self.exec_zb_cmd(at.move_to_hue_and_sat,
-                                      send_mode,
-                                      hue,
-                                      sat,
-                                      value,
-                                      RETRY_TIMEOUT)
+        resp_value = self.exec_zb_cmd(
+            self.coordinator.at_cmds.move_to_hue_and_sat,
+            send_mode,
+            hue,
+            sat,
+            value,
+        )
 
         if resp_value is None:
             LOGGER.error("Error setting bulb color/level")
@@ -282,11 +261,11 @@ class BulbObject(OnOffObject):
         send_mode = 0
         duration = 0
         resp_value = self.exec_zb_cmd(
-            at.colour_temperature,
+            self.coordinator.at_cmds.colour_temperature,
             send_mode,
             colour_temp,
-            duration,
-            RETRY_TIMEOUT)
+            duration
+        )
 
         if resp_value is None:
             LOGGER.error("Error setting bulb color temperature.")
@@ -294,11 +273,11 @@ class BulbObject(OnOffObject):
 
         # Set level
         resp_value = self.exec_zb_cmd(
-            at.move_to_level,
+            self.coordinator.at_cmds.move_to_level,
             send_mode,
             value,
-            duration,
-            RETRY_TIMEOUT)
+            duration
+        )
 
         if resp_value is None:
             LOGGER.error("Error setting bulb level.")
@@ -316,11 +295,11 @@ class BulbObject(OnOffObject):
         colour_temp = 2700
 
         resp_value = self.exec_zb_cmd(
-            at.colour_temperature,
+            self.coordinator.at_cmds.colour_temperature,
             send_mode,
             colour_temp,
-            duration,
-            RETRY_TIMEOUT)
+            duration
+        )
 
         if resp_value is None:
             LOGGER.error("Error setting bulb to white.")
@@ -402,11 +381,11 @@ class BulbObject(OnOffObject):
 
 class Group:
     """ Class for managing a group of devices """
-    def __init__(self, device_name_list):
+    def __init__(self, coordinator, device_name_list):
 
         self.nodes = []
         for dev in device_name_list:
-            self.nodes.append(OnOffObject(dev))
+            self.nodes.append(OnOffObject(coordinator, dev))
 
     def get_state(self):
         """ Get the state of the group.  If one or more devices
@@ -419,22 +398,19 @@ class Group:
         return state
 
     def toggle(self):
-        """ Toggle all devices ON>OFF or OFF>ON
-        """
+        """ Toggle all devices ON>OFF or OFF>ON """
         new_state = not self.get_state()
 
         for node in self.nodes:
             node.set_on_off(new_state)
 
     def group_on(self):
-        """ Turn all devices in the group ON
-        """
+        """ Turn all devices in the group ON """
         for node in self.nodes:
             node.set_on_off(1)
 
     def group_off(self):
-        """ Turn all devices in the group OFF
-        """
+        """ Turn all devices in the group OFF """
         for node in self.nodes:
             node.set_on_off(0)
 
@@ -458,9 +434,7 @@ class SensorObject:
         return time.time() - self.last_report < cfg.SENSOR_OFFLINE_TIME
 
     def update_temperature(self, temperature):
-        """ Update the temperature, temp_high and last_report
-
-        """
+        """ Update the temperature, temp_high and last_report """
         self.temp = temperature
         self.last_report = time.time()
 
@@ -471,58 +445,16 @@ class SensorObject:
         if self.temp_high and self.temp < (cfg.FREEZER_TEMP_THOLD - 1):
             self.temp_high = False
 
-    def set_temp_rpt_cfg(self, checkin_msg):
-        """ If we have not received a temperature report for seom time
-            and we recieve a checkin then reset the attribure report config
-
-            We expect a temp report every 5mins so we allow just over 10mins
-            for 2 missing readings before attempting the reset.
-
-            We need to set a binding on the temperature cluster and
-            the attribute report configuration
-
-            We extract the node id from the checkin message
-            (just in case the node ID changes on us)
-
-            These msgs are sent fire and forget.  There is little
-            point in waiting for the reply - they either work or
-            we try again next checkin
-
-        """
-        if time.time() - self.last_report > (60 * 12):
-            node_id = checkin_msg.split(',')[0].split(":")[1]
-
-            report_interval = f"{60*5:04x}"  # 5 mins
-
-            bind_msg = ("at+bind:{node_id},3,{sensor_eui},"
-                        "06,0402,{dongle_eui},01")
-
-            cfg_rep = ("at+cfgrpt:{node_id},06,0,0402,0,0000,29,"
-                       "0001,{report_interval},0001")
-
-            LOGGER.warning("Resetting temperature attribute report config")
-            at.TX_QUEUE.put(
-                bind_msg.format(
-                    node_id=node_id,
-                    sensor_eui=cfg.DEVS['Temperature Sensor']['eui'],
-                    dongle_eui=cfg.HIVE_EUI)
-                )
-
-            at.TX_QUEUE.put(
-                cfg_rep.format(
-                    node_id=node_id,
-                    report_interval=report_interval)
-                )
-
 
 def main():
-    """ Main Program - runs tests on a colour bulb and a group of devices
-    """
+    """ Main Program - runs tests on a colour bulb and a group of devices """
+
+    hive_zb = at.ZigbeeDevice(name="zb_hive", port=cfg.HIVE_ZB_PORT, baud=cfg.ZB_BAUD)
 
     test_delay = 5
 
     LOGGER.info("Getting colour bulb state")
-    colour_bulb = BulbObject(cfg.get_dev("Sitt Colour"))
+    colour_bulb = BulbObject(hive_zb, cfg.get_dev("Sitt Colour"))
     state = colour_bulb.get_state()
 
     LOGGER.info("Set bulb to white")
@@ -538,12 +470,13 @@ def main():
     time.sleep(test_delay)
 
     # Group Tests
-    group_names = [cfg.get_dev('Sitt Colour'),
-                   cfg.get_dev('Sitt Rear'),
-                   cfg.get_dev('Sitt Front'),
-                   ]
+    group_names = [
+        cfg.get_dev('Sitt Colour'),
+        cfg.get_dev('Sitt Rear'),
+        cfg.get_dev('Sitt Front'),
+    ]
 
-    group = Group(group_names)
+    group = Group(hive_zb, group_names)
 
     LOGGER.info("Turning Group Off")
     group.group_off()
@@ -563,11 +496,6 @@ def main():
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.DEBUG)
-
-    THREADS = at.start_serial_threads(port=cfg.HIVE_ZB_PORT,
-                                      baud=cfg.ZB_BAUD,
-                                      print_status=False,
-                                      rx_q=True)
-
+    logging.basicConfig(level=logging.INFO)
+    at.LOGGER.setLevel(logging.WARNING)
     main()

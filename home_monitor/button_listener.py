@@ -8,13 +8,22 @@ Pairing Commands:
 Bind to on/off cluster.
 Write to the button press type cfg attribute to turn on all button press types.
 
-# Only need these two
+# Only need these two
 at+bind:<nodeId>,3,<BUTTON EUI>,01,0006,<COORD EUI>,01
+                                        
 at+rawzcl:<nodeId>,01,0006,0C3910010200FD181C
+                           | |   | | |   | |
+                           | |   | | |   | 1C = Bits2,3,4 = Short,Double,Long Press
+                           | |   | | |   18 = Attrribute type
+                           | |   | | FD00 = Attribute ID
+                           | |   | 02 = Command ID (write attribute)
+                           | |   01 = Sequence number
+                           | 1039 = Manufacturer code
+                           0C = Frame Control, General Control frame, Dir serv to client, manufacturer specific
 
 # Set attribute report configuration for the custom attribute
-# (note it's a server to client)
-at+cfgrpt:<nodeId>,0,0001,0,0020,20,0E10,0E10,01
+# (note it's a server to client)
+at+cfgrpt:<nodeId>,,0,0001,0,0020,20,0E10,0E10,01
 at+rawzcl:<nodeId>,0006,0C391001060003FD1801000000
 
 Adding some code to listen for the temperature reports from a contact sensor.

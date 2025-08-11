@@ -6,43 +6,69 @@ Created on 21 Feb 2021
 '''
 
 import logging
-import time
-import zigbeetools.threaded_serial as at
+from collections import namedtuple
 
 LOGGER = logging.getLogger(__name__)
+BindObj = namedtuple('Bind', ['src_addr', 'src_ep', 'cluster', 'dst_addr', 'dst_ep'])
+
+
+class Bulb():
+    """ Class to control a Zigbee bulb """
+
+    def __init__(self, node_id):
+        self.node_id = node_id
+        self.state = 'OFF'
+        self.color = 'WHITE'
+
+    def set_state(self, state, color):
+        """ Set the state of the bulb """
+        self.state = state
+        self.color = color
+        LOGGER.info("Bulb %s set to %s, %s", self.node_id, self.state, self.color)
 
 
 def main():
     """ Main Program """
-    at.start_serial_threads(port="/dev/HIVE_DONGLE",
-                            baud=115200,
-                            print_status=False,
-                            rx_q=True)
 
-    while True:
-        while not at.RX_QUEUE.empty():
-            msg = at.RX_QUEUE.get()
-            # CHECKIN:2F28,06
-            if msg.startswith("CHECKIN"):
-                LOGGER.debug("CHECKIN RECEIVED")
-                node_id = msg.split(',')[0].split(":")[1]
+    my_bind = BindObj(
+        src_addr="00124B00160561DE",
+        src_ep="01",
+        cluster="Power Configuration Cluster",
+        dst_addr="0000",
+        dst_ep="01"
+    )
 
-                dongle_eui = "000D6F000C44F290"
-                sensor_eui = "00124B0015D56962"
-                rpt_interval = "{60*10:04x}"
-                bind_msg = ("at+bind:{node_id},3,{sensor_eui},06,0402,"
-                            "{dongle_eui},01")
-                set_report = ("at+cfgrpt:{node_id},06,0,0402,0,0000,29,0001,"
-                              "{rpt_interval},0001")
+    another_bind = BindObj(
+        src_addr="00124B00160561DE",
+        src_ep="01",
+        cluster="On/Off Cluster",
+        dst_addr="0000",
+        dst_ep="01"
+    )
 
-                at.TX_QUEUE.put(bind_msg.format(node_id=node_id,
-                                                sensor_eui=sensor_eui,
-                                                dongle_eui=dongle_eui))
+    print(f"Binding created: {my_bind}")
+    print(f"Binding created: {another_bind}")
+    print(f"Binding created: {my_bind}")
 
-                at.TX_QUEUE.put(set_report.format(node_id=node_id,
-                                                  rpt_interval=rpt_interval))
+    v2_bind = BindObj(
+        src_addr="00124B00160561DE",
+        src_ep="01",
+        cluster="On/Off Cluster",
+        dst_addr="0000"
+    )
+    print(f"Binding created: {v2_bind}")
+    exit()
 
-        time.sleep(0.1)
+
+
+    my_bulb = Bulb("00124B00160561DE")
+    events = [
+        {"event_name": "BIT FAT FRIDAY", "func": my_bulb.set_state, "args": ["ON", "RED"]},
+        {"event_name": "BIT FAT SATURDAY", "func": my_bulb.set_state, "args": ["OFF", "WHITE"]},
+    ]
+
+    for event in events:
+        event["func"](*event["args"])
 
 
 if __name__ == "__main__":

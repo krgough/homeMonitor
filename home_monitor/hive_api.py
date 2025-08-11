@@ -91,6 +91,7 @@ PRODUCT_FIELDS = {
     "id": ["id"],
     "type": ["type"],
     "online": ["props", "online"],
+    "eui": ["props", "eui"],
     "model": ["props", "model"],
     "firmware": ["props", "upgrade", "version"],
 }
@@ -98,6 +99,7 @@ PRODUCT_FIELDS = {
 DEVICE_FIELDS = {
     "name": ["state", "name"],
     "state": ["props", "state"],
+    "eui": ["props", "macAddress"],
     "id": ["id"],
     "type": ["type"],
 }

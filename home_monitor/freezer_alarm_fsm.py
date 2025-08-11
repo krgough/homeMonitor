@@ -4,8 +4,13 @@ Created on 21 Feb 2021
 @author: keithgough
 
 """
-import time
+
+import enum
 import logging
+from queue import Queue
+import time
+import threading
+
 import home_monitor.config as cfg
 
 LOGGER = logging.getLogger(__name__)
@@ -14,18 +19,17 @@ LOGGER = logging.getLogger(__name__)
 NIGHT = [("23:58", "23:59")]
 DAY = [("00:01", "23:59")]
 
+TEST_DELAY = 0.1
+THREAD_SLEEP = 0.001
 
-# pylint: disable=too-few-public-methods
-class Sensor:
-    """Test Sensor"""
-    def __init__(self):
-        self.last_report = time.time()
-        self.temp_high = False
-        self.long_press_received = False
 
-    def online(self):
-        """Sensor online check"""
-        return time.time() - self.last_report < cfg.SENSOR_OFFLINE_TIME
+class Events(enum.Enum):
+    """ Events for the Freezer Alarm FSM """
+    FREEZER_ALARM_TEMP_NORMAL = "FREEZER_ALARM_TEMP_NORMAL"
+    FREEZER_ALARM_TEMP_HIGH = "FREEZER_ALARM_TEMP_HIGH"
+    FREEZER_ALARM_DISABLED = "FREEZER_ALARM_DISABLED"
+    FREEZER_ALARM_SENSOR_OFFLINE_DAY = "FREEZER_ALARM_SENSOR_OFFLINE_DAY"
+    FREEZER_ALARM_SENSOR_OFFLINE_NIGHT = "FREEZER_ALARM_SENSOR_OFFLINE_NIGHT"
 
 
 class Bulb:
@@ -69,13 +73,17 @@ class Bulb:
 
 
 class State:
-    """State object which provides some utility functions for the
-    individual states within the state machine.
-    """
+    """ Provides utility functions for the individual states within the state machine. """
 
-    def __init__(self, bulb, sensor):
-        self.sensor = sensor
-        self.bulb = bulb
+    sensor_online = False
+    temp_high = False
+    long_press_received = False
+
+    def __init__(self, event_queue, sensor_online=False, temp_high=False, long_press_received=False):
+        self.event_queue = event_queue
+        self.sensor_online = sensor_online
+        self.temp_high = temp_high
+        self.long_press_received = long_press_received
         LOGGER.info('Entering state: %s', str(self))
 
     def on_event(self):
@@ -92,6 +100,9 @@ class State:
 
 class TempNormal(State):
     """Temperature is normal"""
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.event_queue.put(Events.FREEZER_ALARM_TEMP_NORMAL)
 
     def on_event(self):
         """Handle the events"""
@@ -99,35 +110,32 @@ class TempNormal(State):
 
         # If no recent reports then transition to state=SensorOffline
         schedule = cfg.FREEZER_SENSOR_OFFLINE_SCHEDULE
-        if not self.sensor.online():
+        if not self.sensor_online:
             if cfg.schedule_check(schedule):
                 return OfflineDay
 
             return OfflineNight
 
         # If online and too hot then transition to state=TempHigh
-        if self.sensor.temp_high:
+        if self.temp_high:
             return TempHigh
 
         return self
 
 
 class TempHigh(State):
-    """Temperature is too high.
-
-    Show a blue light and wait for a long button
-    press to acknowledge the error state
+    """ Temperature is too high.
+    Show a blue light and wait for a long button press to acknowledge the error state
     """
-    def __init__(self, bulb, sensor):
-        super().__init__(bulb, sensor)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         LOGGER.info("Freezer Alarm - setting bulb blue")
-        self.bulb.set_blue()
+        self.event_queue.put(Events.FREEZER_ALARM_TEMP_HIGH)
 
     def on_event(self):
-        if self.sensor.long_press_received:
-            LOGGER.info("Exiting TempHigh setting bulb to white_on")
-            self.sensor.long_press_received = False
-            self.bulb.set_white()
+        if self.long_press_received:
+            LOGGER.info("Disable requested with long press.")
+            self.long_press_received = False
             return Disabled
         return self
 
@@ -138,9 +146,14 @@ class Disabled(State):
     Then we re-enable by jumping to state=TempNormal
     We use 1'C hysteresis from threshold to reset
     """
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.event_queue.put(Events.FREEZER_ALARM_DISABLED)
+        self.long_press_received = False
+
     def on_event(self):
-        if self.sensor.online() and not self.sensor.temp_high:
-            LOGGER.info("Temp is normal - enabling alarm")
+        if self.sensor_online and not self.temp_high:
+            LOGGER.info("Temp is normal. Enabling alarm")
             return TempNormal
         return self
 
@@ -149,31 +162,28 @@ class OfflineDay(State):
     """Show a green light (Unless it's the middle of the night)
     Exit if long button press or if sensor comes back online
     """
-    def __init__(self, bulb, sensor):
-        super().__init__(bulb, sensor)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
         # It's daytime so we can show green
         LOGGER.info("Sensor Offline - setting bulb green")
-        self.bulb.set_green()
+        self.event_queue.put(Events.FREEZER_ALARM_SENSOR_OFFLINE_DAY)
 
     def on_event(self):
 
         # If we have a recent report then sensor is online
         # so tansition back to state=TempNormal
-        if self.sensor.online():
-            self.bulb.set_white_off()
+        if self.sensor_online:
             return TempNormal
 
         # If we have a long_press on the button then we are
         # disabling/acknowleging the error condition so
         # transition to state=Disabled
-        if self.sensor.long_press_received:
-            self.bulb.set_white_off()
+        if self.long_press_received:
             return Disabled
 
         # If it is now night then switch to OfflineNight
         if not cfg.schedule_check(cfg.FREEZER_SENSOR_OFFLINE_SCHEDULE):
-            self.bulb.set_white_off()
             return OfflineNight
 
         return self
@@ -183,14 +193,15 @@ class OfflineNight(State):
     """ Show a green light (Unless it's the middle of the night)
     Exit if long button press or if sensor comes back online
     """
-    def __init__(self, bulb, sensor):
-        super().__init__(bulb, sensor)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         LOGGER.info("Sensor Offline - but out of hours, so no light")
+        self.event_queue.put(Events.FREEZER_ALARM_SENSOR_OFFLINE_NIGHT)
 
     def on_event(self):
         # If we have a recent report then sensor is online
         # so tansition back to state=TempNormal
-        if self.sensor.online():
+        if self.sensor_online:
             return TempNormal
 
         # If it is now day then switch to OfflineDay
@@ -200,21 +211,24 @@ class OfflineNight(State):
         # If we have a long_press on the button then we are
         # disabling/acknowleging the error condition so
         # transition to state=Disabled
-        if self.sensor.long_press_received:
+        if self.long_press_received:
             return Disabled
 
         return self
 
 
-class SensorStateMachine:
+class FreezerAlarmFSM:
     """A simple state machine"""
 
-    def __init__(self, bulb, sensor):
-        """Initialize the components."""
-        self.bulb = bulb
-        self.sensor = sensor
-        # Start with a default state.
-        self.state = TempNormal(bulb, sensor)
+    def __init__(self, event_queue, sensor_online, temp_high=False, long_press_received=False):
+        """ Start with a default state """
+        # self.event_queue = event_queue
+        self.state = TempNormal(
+            event_queue=event_queue,
+            sensor_online=sensor_online,
+            temp_high=temp_high,
+            long_press_received=long_press_received
+        )
 
     def on_event(self):
         """This is the state machine handler.
@@ -226,49 +240,54 @@ class SensorStateMachine:
         next_state = self.state.on_event()
 
         # Reset any long press events
-        self.sensor.long_press_received = False
+        self.state.long_press_received = False
 
         # If a next state is not current state then initialise the new state
         if next_state != self.state:
-            self.state = next_state(self.bulb, self.sensor)
+            self.state = next_state(
+                event_queue=self.state.event_queue,
+                sensor_online=self.state.sensor_online,
+                temp_high=self.state.temp_high,
+                long_press_received=self.state.long_press_received
+            )
 
 
-def temp_high_event(sensor):
+def temp_high_event(fsm):
     """Test event"""
     LOGGER.debug("Setting temp high")
-    sensor.temp_high = True
+    fsm.state.temp_high = True
 
 
-def temp_low_event(sensor):
+def temp_low_event(fsm):
     """Test event"""
     LOGGER.debug("Setting temperature low")
-    sensor.temp_high = False
-    sensor.last_report = time.time()
+    fsm.state.temp_high = False
+    fsm.state.sensor_online = True
 
 
-def temp_normal_event(sensor):
+def temp_normal_event(fsm):
     """Test event"""
     LOGGER.debug("Setting temp low")
-    sensor.temp_high = False
-    sensor.last_report = time.time()
+    fsm.state.temp_high = False
+    fsm.state.sensor_online = True
 
 
-def long_press_event(sensor):
+def long_press_event(fsm):
     """Test event"""
     LOGGER.debug("Settinglong_press")
-    sensor.long_press_received = True
+    fsm.state.long_press_received = True
 
 
-def sensor_offline_event(sensor):
+def sensor_offline_event(fsm):
     """Test event"""
     LOGGER.debug("Setting last_report to very old")
-    sensor.last_report = 0
+    fsm.state.sensor_online = False
 
 
-def sensor_online_event(sensor):
+def sensor_online_event(fsm):
     """Test event"""
     LOGGER.debug("Setting last_report to very new")
-    sensor.last_report = time.time()
+    fsm.state.sensor_online = True
 
 
 # TEMP_NORMAL > OFFLINE_NIGHT > TEMP_NORMAL
@@ -277,126 +296,200 @@ def sensor_online_event(sensor):
 # TEMP_NORMAL > OFFLINE_DAY > TEMP_NORMAL
 # TEMP_NORMAL > DISARMED > TEMP_NORMAL
 
+def queue_worker(event_queue, bulb):
+    """ Process on the events we have in the queue"""
+    while True:
+        while event_queue.empty() is False:
+            event = event_queue.get()
 
-def test1(ssm, sensor, bulb):
+            # Process the event
+            LOGGER.debug("Processing event: %s", event)
+            if event == Events.FREEZER_ALARM_TEMP_NORMAL:
+                bulb.set_white_off()
+            elif event == Events.FREEZER_ALARM_TEMP_HIGH:
+                bulb.set_blue()
+            elif event == Events.FREEZER_ALARM_DISABLED:
+                bulb.set_white_off()
+            elif event == Events.FREEZER_ALARM_SENSOR_OFFLINE_DAY:
+                bulb.set_green()
+            elif event == Events.FREEZER_ALARM_SENSOR_OFFLINE_NIGHT:
+                bulb.set_white_off()
+
+        time.sleep(THREAD_SLEEP)  # Sleep to avoid busy waiting
+
+
+def fsm_worker(ssm):
+    """ Run the state machine worker in a  thread"""
+    while True:
+        ssm.on_event()
+        time.sleep(THREAD_SLEEP)  # Sleep to avoid busy waiting
+
+
+def test1(ssm, bulb):
     """TEMP_NORMAL > OFFLINE_NIGHT > TEMP_NORMAL"""
     cfg.FREEZER_SENSOR_OFFLINE_SCHEDULE = NIGHT
     bulb.bulb_on = False
     bulb.colour = 'white'
-
-    sensor_offline_event(sensor)
-    ssm.on_event()
+    # Goto offline night
+    sensor_offline_event(ssm)
+    time.sleep(0.5)
     assert str(ssm.state) == 'OfflineNight'
     assert bulb.is_white_off()
 
-    ssm.on_event()
+    # Check we stay in OfflineNight
+    time.sleep(TEST_DELAY)
     assert str(ssm.state) == 'OfflineNight'
 
-    sensor_online_event(sensor)
-    ssm.on_event()
+    # Now go back online night i.e. TempNormal
+    sensor_online_event(ssm)
+    # ssm.on_event()
+    # queue_worker(ssm.event_queue, bulb)
+    time.sleep(TEST_DELAY)
     assert str(ssm.state) == 'TempNormal'
+    LOGGER.info("Test 1 is complete")
 
 
-def test2(ssm, sensor, bulb):
+def test2(ssm, bulb):
     """TEMP_NORMAL > OFFLINE_DAY > OFFLINE_NIGHT > DISABLED > TEMP_NORMAL"""
+
+    # Goto OfflineDay
     cfg.FREEZER_SENSOR_OFFLINE_SCHEDULE = DAY
-    sensor_offline_event(sensor)
-    ssm.on_event()
+    sensor_offline_event(ssm)
+    time.sleep(TEST_DELAY)
     assert str(ssm.state) == 'OfflineDay'
     assert bulb.is_green()
-    ssm.on_event()
+
+    # Check we stay in OfflineDay
+    time.sleep(TEST_DELAY)
     assert str(ssm.state) == 'OfflineDay'
 
+    # Goto OfflineNight
     cfg.FREEZER_SENSOR_OFFLINE_SCHEDULE = NIGHT
-    ssm.on_event()
+    time.sleep(TEST_DELAY)
     assert str(ssm.state) == 'OfflineNight'
     assert bulb.is_white_off()
-    ssm.on_event()
+
+    # Check we stay in OfflineNight
+    time.sleep(TEST_DELAY)
     assert str(ssm.state) == 'OfflineNight'
 
-    long_press_event(sensor)
-    ssm.on_event()
+    # Goto Disabled
+    long_press_event(ssm)
+    time.sleep(TEST_DELAY)
     assert str(ssm.state) == 'Disabled'
-    ssm.on_event()
+
+    # Check we stay in Disabled
+    time.sleep(TEST_DELAY)
     assert str(ssm.state) == 'Disabled'
 
-    temp_low_event(sensor)
-    ssm.on_event()
-    assert str(ssm.state) == 'TempNormal'
-    ssm.on_event()
+    # Goto TempNormal from Disabled
+    temp_low_event(ssm)
+    time.sleep(TEST_DELAY)
     assert str(ssm.state) == 'TempNormal'
 
+    # Check we stay in TempNormal
+    time.sleep(TEST_DELAY)
+    assert str(ssm.state) == 'TempNormal'
 
-def test3(ssm, sensor, bulb):
+    LOGGER.info("Test 2 is complete")
+
+
+def test3(ssm, bulb):
     """TEMP_NORMAL > OFFLINE_NIGHT > OFFLINE_DAY > DISARMED > TEMP_NORMAL"""
+
+    # Goto OfflineNight
     cfg.FREEZER_SENSOR_OFFLINE_SCHEDULE = NIGHT
-    sensor_offline_event(sensor)
-    ssm.on_event()
+    sensor_offline_event(ssm)
+    time.sleep(TEST_DELAY)
     assert str(ssm.state) == 'OfflineNight'
-    ssm.on_event()
+    # Check we stay in OfflineNight
+    time.sleep(TEST_DELAY)
     assert str(ssm.state) == 'OfflineNight'
 
+    # Goto OfflineDay
     cfg.FREEZER_SENSOR_OFFLINE_SCHEDULE = DAY
-    ssm.on_event()
+    time.sleep(TEST_DELAY)
     assert str(ssm.state) == 'OfflineDay'
     assert bulb.is_green()
-    ssm.on_event()
+    # Check we stay in OfflineDay
+    time.sleep(TEST_DELAY)
     assert str(ssm.state) == 'OfflineDay'
 
-    long_press_event(sensor)
-    ssm.on_event()
+    # Goto Disabled
+    long_press_event(ssm)
+    time.sleep(TEST_DELAY)
     assert str(ssm.state) == 'Disabled'
     assert bulb.is_white_off()
-    ssm.on_event()
+    # Check we stay in Disabled
+    time.sleep(TEST_DELAY)
     assert str(ssm.state) == 'Disabled'
 
-    temp_low_event(sensor)
-    ssm.on_event()
+    # Goto TempNormal from Disabled
+    temp_low_event(ssm)
+    time.sleep(TEST_DELAY)
     assert str(ssm.state) == 'TempNormal'
-    ssm.on_event()
+    # Check we stay in TempNormal
+    time.sleep(TEST_DELAY)
     assert str(ssm.state) == 'TempNormal'
 
+    LOGGER.info("Test 3 is complete")
 
-def test4(ssm, sensor, bulb):
+
+def test4(ssm, bulb):
     """TEMP_NORMAL > OFFLINE_DAY > TEMP_NORMAL"""
+
+    # Goto OfflineDay
     cfg.FREEZER_SENSOR_OFFLINE_SCHEDULE = DAY
-    sensor_offline_event(sensor)
-    ssm.on_event()
+    sensor_offline_event(ssm)
+    time.sleep(TEST_DELAY)
     assert str(ssm.state) == 'OfflineDay'
     assert bulb.is_green()
-    ssm.on_event()
+    # Check we stay in OfflineDay
+    time.sleep(TEST_DELAY)
     assert str(ssm.state) == 'OfflineDay'
 
-    sensor_online_event(sensor)
-    ssm.on_event()
+    # Goto TempNormal
+    sensor_online_event(ssm)
+    time.sleep(TEST_DELAY)
     assert str(ssm.state) == 'TempNormal'
     assert bulb.is_white_off()
-    ssm.on_event()
+    # Check we stay in TempNormal
+    time.sleep(TEST_DELAY)
     assert str(ssm.state) == 'TempNormal'
 
+    LOGGER.info("Test 4 is complete")
 
-def test5(ssm, sensor, bulb):
+
+def test5(ssm, bulb):
     """TEMP_NORMAL > TEMP_HIGH > DISARMED > TEMP_NORMAL"""
-    temp_high_event(sensor)
-    ssm.on_event()
+
+    # Goto TempHigh
+    temp_high_event(ssm)
+    time.sleep(TEST_DELAY)
     assert str(ssm.state) == 'TempHigh'
     assert bulb.is_blue()
-    ssm.on_event()
+    # Check we stay in TempHigh
+    time.sleep(TEST_DELAY)
     assert str(ssm.state) == 'TempHigh'
 
-    long_press_event(sensor)
-    ssm.on_event()
+    # Goto Disabled
+    long_press_event(ssm)
+    time.sleep(TEST_DELAY)
     assert str(ssm.state) == 'Disabled'
     assert bulb.is_white_off()
-    ssm.on_event()
+    # Check we stay in Disabled
+    time.sleep(TEST_DELAY)
     assert str(ssm.state) == 'Disabled'
 
-    temp_normal_event(sensor)
-    ssm.on_event()
+    temp_normal_event(ssm)
+    time.sleep(TEST_DELAY)
     assert str(ssm.state) == 'TempNormal'
     assert bulb.is_white_off()
-    ssm.on_event()
+    # Check we stay in TempNormal
+    time.sleep(TEST_DELAY)
     assert str(ssm.state) == 'TempNormal'
+
+    LOGGER.info("Test 5 is complete")
 
 
 def tests():
@@ -408,16 +501,28 @@ def tests():
     TEST4 - TEMP_NORMAL > OFFLINE_DAY > TEMP_NORMAL
     TEST5 - TEMP_NORMAL > TEMP_HIGH > DISARMED > TEMP_NORMAL
     """
-    sensor = Sensor()
+
     bulb = Bulb()
+    ssm_event_queue = Queue(maxsize=100)
+    ssm_event_queue.put("JUNK")
+    ssm = FreezerAlarmFSM(event_queue=ssm_event_queue, sensor_online=True)
 
-    ssm = SensorStateMachine(bulb, sensor)
+    fsm_thread = threading.Thread(target=fsm_worker, args=(ssm,), daemon=True)
+    fsm_thread.start()
 
-    test1(ssm, sensor, bulb)
-    test2(ssm, sensor, bulb)
-    test3(ssm, sensor, bulb)
-    test4(ssm, sensor, bulb)
-    test5(ssm, sensor, bulb)
+    q_worker_thread = threading.Thread(target=queue_worker, args=(ssm_event_queue, bulb), daemon=True)
+    q_worker_thread.start()
+
+    LOGGER.info("Starting tests 1")
+    test1(ssm, bulb)
+    LOGGER.info("Starting tests 2")
+    test2(ssm, bulb)
+    LOGGER.info("Starting tests 3")
+    test3(ssm, bulb)
+    LOGGER.info("Starting tests 4")
+    test4(ssm, bulb)
+    LOGGER.info("Starting tests 5")
+    test5(ssm, bulb)
 
 
 if __name__ == "__main__":
