@@ -100,7 +100,7 @@ def wds_pairing(coordinator: at.ZigbeeDevice, node_id):
         print("Device EUI was not found")
         sys.exit()
 
-    # Set a binding on the power control cluster so we can get the battery level
+    # Set a binding on the power control cluster so we can get the battery volatge
     binding = at.bind_object(
         src_addr=dev_eui,
         src_ep="06",
@@ -110,14 +110,14 @@ def wds_pairing(coordinator: at.ZigbeeDevice, node_id):
     )
     resp_state, resp_code, resp_value = coordinator.at_cmds.set_binding(node_id=node_id, binding=binding)
 
-    # Set an attribute report configiration to get the battery voltage every 20mins
-    node = at.NodeObj(node_id, "06", manuf_id=None)
+    # Set an attribute report configuration to get the battery voltage every 10mins
+    node = at.NodeObj(node_id, "06", manuf_id=None, eui=dev_eui)
     pc_cluster = at.cluster_object("Power Configuration Cluster")
     bv_attribute = at.attribute_object(
         clust_id=pc_cluster.id,
         attr_id=zcl.get_attribute_name_and_id("Power Configuration Cluster", "batteryVoltage")[0]
     )
-    bv_report = at.report_object(min_rep='0001', max_rep=f'{20*60:04x}', change_rep='01')
+    bv_report = at.report_object(min_rep='0001', max_rep=f'{10*60:04x}', change_rep='0A')
     resp_state, resp_code, resp_value = coordinator.at_cmds.set_attribute_reporting(
         node=node,
         cluster=pc_cluster,
@@ -135,7 +135,7 @@ def wds_pairing(coordinator: at.ZigbeeDevice, node_id):
     ci_attr = at.attribute_object(
         clust_id="Poll Control Cluster",
         attr_id="checkInInterval",
-        value=f'{20*60:04x}'
+        value=f'{10*60:04x}'
     )
     resp_state, resp_code, resp_value = coordinator.at_cmds.set_attribute(
         node=node,
@@ -157,6 +157,35 @@ def wds_pairing(coordinator: at.ZigbeeDevice, node_id):
         dst_ep="01"
     )
     resp_state, resp_code, resp_value = coordinator.at_cmds.set_binding(node_id=node_id, binding=binding)
+
+    # Set a binding on the temperature measurement cluster
+    binding = at.bind_object(
+        src_addr=dev_eui,
+        src_ep="06",
+        cluster="Temperature Measurement Cluster",
+        dst_addr=coo_eui,
+        dst_ep="01"
+    )
+    resp_state, resp_code, resp_value = coordinator.at_cmds.set_binding(node_id=node_id, binding=binding)
+
+    # Set an attribute report configuration on the temperature
+    tm_cluster = at.cluster_object("Temperature Measurement Cluster")
+    tm_attribute = at.attribute_object(
+        clust_id=tm_cluster.id,
+        attr_id=zcl.get_attribute_name_and_id("Temperature Measurement Cluster", "measuredValue")[0]
+    )
+    tm_report = at.report_object(min_rep='0001', max_rep=f'{10*60:04x}', change_rep='0064')
+    resp_state, resp_code, resp_value = coordinator.at_cmds.set_attribute_reporting(
+        node=node,
+        cluster=tm_cluster,
+        attribute=tm_attribute,
+        report=tm_report
+    )
+    if not resp_state or resp_code != zcl.STATUS_CODES['SUCCESS']:
+        print(f"Error setting attribute reporting: {resp_value}")
+        sys.exit()
+    else:
+        print("Battery voltage reporting set successfully")
 
     print("WDS device paired successfully.")
 
@@ -216,7 +245,7 @@ def siren_pairing(coordinator: at.ZigbeeDevice, node_id):
 
     # Set the cicie eui - This is required to get it working
     # f"at+writeatr:{node_id},01,0,0500,0010,F0,{coo_eui}"
-    resp_state, resp_code, resp_value = coordinator.at_cmds.set_atr(
+    resp_state, resp_code, resp_value = coordinator.at_cmds.set_attribute(
         clust_id=zcl.get_cluster_name_and_id("IAS Zone Cluster")[0],
         attr_id=zcl.get_attribute_name_and_id("IAS Zone Cluster", "CIE Address")[0],
         value=coo_eui
@@ -273,5 +302,5 @@ def main():
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.INFO)
     main()

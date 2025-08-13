@@ -2,18 +2,19 @@
 
 """
 Created on 7 Nov 2018
-
-@author: Keith.Gough
-
-Application to Monitor train departures and indicate delays
-
-Indication is by setting a pattern on an attached HH360 LED board or,
-by setting a Hive colour bulb to e.g. RED and ON.
-
-User can then use an associated ZigBee button to trigger a voice announcement
-for the delayed train services.
-
 25/11/2019 Keith Gough - PEP8 Updates.
+12/08/2025 Keith Gough - MajorRefactor
+    - Allow use of threaded serial for multiple zigbee dongles
+    - Support use of the Zigbee Siren on Home Zigbee now that it deprecated from Hive
+    - Improved the Zigbee device management and event handling
+
+Home Automation Application
+- Monitor train departures and indicate delays. Use button to announce delays.
+- Use ZB Button to control Hive Bulbs/Plugs
+- Monitor Freezer Temp and alert if it gets hot. Use button to announce temperature.
+- Use Siren and WDS Sensors to implement a security system
+- Monitor DHW cylinder temperature and use button to announce level.
+
 
 """
 
@@ -159,12 +160,6 @@ def configure_logger(logger_name, log_path=None):
     return logging.getLogger(logger_name)
 
 
-# def flush_queue(my_queue):
-#     """Flush the given queue"""
-#     while not my_queue.empty():
-#         my_queue.get()
-
-
 def check_for_delays(args, voice_strings):
     """Check for delays and create voice strings for any delays"""
 
@@ -178,7 +173,7 @@ def check_for_delays(args, voice_strings):
     # If we are using a hive bulb as an indicator then create a data object
     # for the bulb.
     if args["use_hive"]:
-        colour_bulb = api.BulbObject(cfg.get_dev(cfg.INDICATOR_BULB))
+        colour_bulb = zb_hive.BulbObject(cfg.get_dev(cfg.INDICATOR_BULB))
 
     # Get a hive account object for controlling the alarm
     if args["set_alarm"]:
@@ -202,7 +197,6 @@ def check_for_delays(args, voice_strings):
         if args["use_leds"]:
             led_delay_indication(delays)
 
-
         # Hive Indication using an RGB bulb
         # Turn on alert if we have a delay
         # Calncel old alerts if no delays or if we exit schedule period
@@ -221,62 +215,41 @@ def check_for_delays(args, voice_strings):
         time.sleep(DELAY_CHECK_SLEEP_TIME)
 
 
-def led_delay_indication(delays):
-    """ Indicate delays using the HH360 LED board """
-    # Turn on the LED warning pattern if we have a delay
-    if delays:
-        led.show_pattern("CLOCK", led.Colours.RED)
+
+
+
+
+def announce_dhw_level_action(voice_strings):
+    """Announce the current hot water level"""
+    uwl = udp_cli.send_cmd(udp_cli.UWL_MESSAGE, udp_cli.UWL_RESP, udp_cli.ADDRESS)
+    msg = f"Hot water is at {uwl}"
+    voice_strings.play([msg])
+
+
+def announce_freezer_temp_action(freezer_sensor, voice_strings):
+    """Announce the current freezer temperature"""
+    if freezer_sensor.temp is not None:
+        msg = f"Freezer Temperature is {freezer_sensor.temp}"
+        voice_strings.play([msg])
     else:
-        # Turn off the LED warning if we have no delays.
-        led.show_pattern("NO_DELAYS", led.Colours.GREEN_DIM)
+        LOGGER.warning("Freezer temperature not available")
 
 
-def hive_bulb_indication(delays, colour_bulb):
-    """Turn a bulb on and red if there is a delay, set alert=True
-
-    Cancel old alerts:
-        Turn bulb white and off if no delays and alert is still active
-        Turn bulb white and off if schedule=off and alert is still active
+def doorbell_press_action(colour_bulb):
+    """Action on doorbell press:
+    Play doorbell sound and briefly turn bulb on/red.
     """
-    # Turn on the Hive bulb (to red) if we have a delay and the schedule
-    # allows indications
-    sched = cfg.TRAIN_DELAY_INDICATION_SCHEDULE
-    if delays and cfg.schedule_check(sched) and (not colour_bulb.alert_active):
-        LOGGER.info("Turn indicator bulb on.  Delays found & schedule is on")
-        colour_bulb.set_red()
-        colour_bulb.alert_active = True
+    # For any bell press change indicator bulb red and play the bell sound
+    cmd = f"aplay {cfg.BELL_SOUND} &"
+    my_pipe = os.popen(cmd, "w")
+    my_pipe.close()
 
-    # Turn off the Hive bulb if no delays and we think we are
-    # still showing an alert
-    if (not delays) and colour_bulb.alert_active:
-        LOGGER.info("No more delays.  Alert active.  Attempting to cancel alert..")
-        if colour_bulb.is_red():
-            LOGGER.info("Bulb is red so set it to white")
-            colour_bulb.set_white_off()
-            if not colour_bulb.is_red():
-                LOGGER.info("Bulb is not red.  Alert cancelled")
-                colour_bulb.alert_active = False
-            else:
-                LOGGER.error("Bulb set to white failed.  Alert still active.")
-        else:
-            LOGGER.info("Bulb is not red.  Alert cancelled")
-            colour_bulb.alert_active = False
-
-    # Turn off hive bulb if schedule is off and we think we are
-    # still showing an alert
-    if not cfg.schedule_check(sched) and colour_bulb.alert_active:
-        LOGGER.info("Schedule OFF, Alert Active.  Attempting to cancel alert...")
-        if colour_bulb.is_red():
-            LOGGER.info("Bulb is red so set it to white and off")
-            colour_bulb.set_white_off()
-            if not colour_bulb.is_red():
-                LOGGER.info("Bulb is not red.  Alert canceled.")
-                colour_bulb.alert_active = False
-            else:
-                LOGGER.error("Bulb set to white failed.  Alert still active.")
-        else:
-            LOGGER.info("Bulb is not red.  Alert canceled.")
-            colour_bulb.alert_active = False
+    # While the bell is ringing we change the bulb colour briefly
+    # Only use bulb if hive_indication and we can get the current bulb state
+    bulb_state = colour_bulb.get_state()
+    colour_bulb.set_red()
+    time.sleep(1)  # Indication duration
+    colour_bulb.set_state(*bulb_state)
 
 
 def button_press(cmd, sitt_group, freezer_sensor, voice_strings):
@@ -317,40 +290,6 @@ def button_press(cmd, sitt_group, freezer_sensor, voice_strings):
             freezer_sensor.long_press_received = True
 
 
-
-def announce_dhw_level(voice_strings):
-    """Announce the current hot water level"""
-    uwl = udp_cli.send_cmd(udp_cli.UWL_MESSAGE, udp_cli.UWL_RESP, udp_cli.ADDRESS)
-    msg = f"Hot water is at {uwl}"
-    voice_strings.play([msg])
-
-
-def announce_freezer_temp(freezer_sensor, voice_strings):
-    """Announce the current freezer temperature"""
-    if freezer_sensor.temp is not None:
-        msg = f"Freezer Temperature is {freezer_sensor.temp}"
-        voice_strings.play([msg])
-    else:
-        LOGGER.warning("Freezer temperature not available")
-
-
-def doorbell_press(colour_bulb):
-    """Action on doorbell press:
-    Play doorbell sound and briefly turn bulb on/red.
-    """
-    # For any bell press change indicator bulb red and play the bell sound
-    cmd = f"aplay {cfg.BELL_SOUND} &"
-    my_pipe = os.popen(cmd, "w")
-    my_pipe.close()
-
-    # While the bell is ringing we change the bulb colour briefly
-    # Only use bulb if hive_indication and we can get the current bulb state
-    bulb_state = colour_bulb.get_state()
-    colour_bulb.set_red()
-    time.sleep(1)  # Indication duration
-    colour_bulb.set_state(*bulb_state)
-
-
 def event_thread_handler(args, button_press_queue, hive_indication, voice_strings):
     """ Handles the period checks:
      
@@ -360,11 +299,7 @@ def event_thread_handler(args, button_press_queue, hive_indication, voice_string
 
      """
     
-    events = {
-        "TOGGLE_LIGHTS": {"event_name": "Toggle Lights", "func": sitt_group.toggle, "args": []},
-        "PLAY_VOICE_STRINGS": {"event_name": "Play Voice Strings", "func": voice_strings.play, "args": []},
-        "PLAY_HOT_WATER": {"event_name": "Play Hot Water Level", "func": udp_cli.send_cmd, "args": [udp_cli.UWL_MESSAGE, udp_cli.U
-    }    ]
+ 
 
 
     # Check for delays
@@ -480,7 +415,6 @@ def main():
     thread_pool = []
 
     voice_strings = Voice()
-
 
     # Start the Hive Zigbee threads
     if args["use_hive"]:

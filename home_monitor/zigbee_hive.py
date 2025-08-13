@@ -28,7 +28,7 @@ class OnOffObject:
     # Only one instance at a time can send/receive commands
     lock = threading.RLock()
 
-    def __init__(self, coordinator: at.ZigbeeDevice, dev):
+    def __init__(self, coordinator: at.ZigbeeDevice, dev: dict):
         self.coordinator = coordinator
         self.name = dev['name']
         self.eui = dev['eui']
@@ -61,7 +61,7 @@ class OnOffObject:
 
                 if resp_state:
                     self.node_id = resp_value
-                    self.node = at.NodeObj(self.node_id, self.ep_id, False)
+                    self.node = at.node_object(node_id=self.node_id, ep_id=self.ep_id, manuf_id=None, eui=self.eui)
                 else:
                     LOGGER.error("ERROR: Node ID was not found. %s", self.name)
                     # LOGGER.error(resp_value)
@@ -385,7 +385,7 @@ class Group:
 
         self.nodes = []
         for dev in device_name_list:
-            self.nodes.append(OnOffObject(coordinator, dev))
+            self.nodes.append(OnOffObject(coordinator, cfg.get_hive_dev(dev)))
 
     def get_state(self):
         """ Get the state of the group.  If one or more devices
@@ -450,11 +450,12 @@ def main():
     """ Main Program - runs tests on a colour bulb and a group of devices """
 
     hive_zb = at.ZigbeeDevice(name="zb_hive", port=cfg.HIVE_ZB_PORT, baud=cfg.ZB_BAUD)
+    group = Group(hive_zb, cfg.HIVE_SITT_GROUP)
+    colour_bulb = BulbObject(hive_zb, cfg.get_hive_dev("Sitt Colour"))
 
     test_delay = 5
 
-    LOGGER.info("Getting colour bulb state")
-    colour_bulb = BulbObject(hive_zb, cfg.get_dev("Sitt Colour"))
+    LOGGER.info("Getting colour bulb state (so we can reset at the end)")
     state = colour_bulb.get_state()
 
     LOGGER.info("Set bulb to white")
@@ -470,14 +471,6 @@ def main():
     time.sleep(test_delay)
 
     # Group Tests
-    group_names = [
-        cfg.get_dev('Sitt Colour'),
-        cfg.get_dev('Sitt Rear'),
-        cfg.get_dev('Sitt Front'),
-    ]
-
-    group = Group(hive_zb, group_names)
-
     LOGGER.info("Turning Group Off")
     group.group_off()
     time.sleep(test_delay)

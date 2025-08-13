@@ -30,6 +30,26 @@ class Bulb():
 def main():
     """ Main Program """
 
+    from enum import Enum
+
+    class LastClickType(Enum):
+        SHORT_PRESS = 0x04
+        DOUBLE_PRESS = 0x08
+        LONG_PRESS = 0x10
+
+    inp = 0x10
+    state = LastClickType(inp)
+    if state == LastClickType.SHORT_PRESS:
+        print(LastClickType.SHORT_PRESS)
+
+    if state == LastClickType.DOUBLE_PRESS:
+        print(LastClickType.DOUBLE_PRESS)
+
+    if state == LastClickType.LONG_PRESS:
+        print(LastClickType.LONG_PRESS)
+
+    exit()
+
     my_bind = BindObj(
         src_addr="00124B00160561DE",
         src_ep="01",
