@@ -1,10 +1,15 @@
 """
 
-Voice Class used by multiple other modules so placed here so both can import.
+Voice Class used to create voice announcements from text
 
 """
+
 import logging
-import os
+import subprocess
+import tempfile
+from typing import List, Union
+
+from gtts import gTTS
 
 from home_monitor import train_times as tt
 
@@ -18,71 +23,68 @@ def timestamp_from_time_string(time_string):
     return seconds
 
 
-class Voice:
-    """Class for creating and playing voice announcements"""
+def build_delay_voice_strings(args):
+    """Build the voice strings"""
+    voice_strings = []
+    delays = tt.get_delays(from_crs=args.from_station, to_crs=args.to_station)
+    to_station = tt.get_station_name(crs_code=args.to_station)
+    from_station = tt.get_station_name(crs_code=args.from_station)
 
-    def __init__(self):
-        self.strings = []
-
-    def build_voice_string(self, delays, from_station, to_station):
-        """Build the voice strings"""
-        self.strings = []
-        for delay in delays:
-            to_station = tt.get_station_name(delay["to"])
-            from_station = tt.get_station_name(delay["from"])
-
-            voice_string = (
-                f"The {delay['std']} from {from_station} to {to_station}, is "
-            )
-
-            if delay["isCancelled"]:
-                if delay["cancelReason"]:
-                    voice_string += f"cancelled. {delay['cancelReason']}."
-                else:
-                    voice_string += "cancelled."
-            else:
-                voice_string += "delayed"
-
-                try:
-                    etd = timestamp_from_time_string(delay["etd"])
-                    std = timestamp_from_time_string(delay["std"])
-                    delay_time = int((etd - std) / 60)
-                # ValueError can occur if there's no colon in the time HH:MM
-                # AttributeError occurs if any vars are None
-                except (ValueError, AttributeError):
-                    LOGGER.error("Could not parse etd|std from the delay")
-                    LOGGER.error(delay)
-                    delay_time = None
-
-                if delay_time:
-                    voice_string += f" by {delay_time} minutes."
-
-                if delay["delayReason"]:
-                    voice_string += f". {delay['delayReason']}."
-
-            self.strings.append(voice_string)
-
-        # Null voice string for no-delays situation
-        if not delays:
-            voice_string = "No delays listed for trains from {} to {}."
-            self.strings.append(
-                voice_string.format(
-                    tt.get_station_name(from_station), tt.get_station_name(to_station)
-                )
-            )
-
-    def play(self, msg=None):
-        """Play the given voice strings"""
-
-        voice_strings = msg if msg else self.strings
-        voice_string = " . ".join(voice_strings) + " ."
-
-        LOGGER.debug(voice_string)
-        # Form the complete command
-        temp_voice_file = "/tmp/voicefile.wav"
-        cmd = "pico2wave -l en-GB -w {tvf} '{vs}' && aplay {tvf} &".format(
-            tvf=temp_voice_file, vs=voice_string
+    for delay in delays:
+        voice_string = (
+            f"The {delay['std']} from {from_station} to {to_station} is "
         )
 
-        my_pipe = os.popen(cmd, "w")
-        my_pipe.close()
+        if delay["isCancelled"]:
+            if delay["cancelReason"]:
+                voice_string += f"cancelled. {delay['cancelReason']}."
+            else:
+                voice_string += "cancelled."
+        else:
+            voice_string += "delayed"
+
+            try:
+                etd = timestamp_from_time_string(delay["etd"])
+                std = timestamp_from_time_string(delay["std"])
+                delay_time = int((etd - std) / 60)
+            # ValueError can occur if there's no colon in the time HH:MM
+            # AttributeError occurs if any vars are None
+            except (ValueError, AttributeError):
+                LOGGER.error("Could not parse etd|std from the delay")
+                LOGGER.error(delay)
+                delay_time = None
+
+            if delay_time:
+                voice_string += f" by {delay_time} minutes."
+            else:
+                voice_string += "."
+
+            if delay["delayReason"]:
+                voice_string += f" {delay['delayReason']}."
+
+        voice_strings.append(voice_string)
+
+    # Null voice string for no-delays situation
+    if not delays:
+        voice_strings.append(f"No delays listed for trains from {from_station} to {to_station}.")
+
+    return voice_strings
+
+
+def play(msgs: Union[str, List[str]]):
+    """Play the given voice strings"""
+
+    if isinstance(msgs, str):
+        msgs = [msgs]
+
+    msgs = " ".join(msgs)
+    LOGGER.info(msgs)
+
+    # Create a gTTS object. 'lang' specifies the language of the text. 'en' is for English.
+    tts = gTTS(text=msgs, lang='en')
+
+    # Save the generated audio to a temp file
+    # Play the file with mpg123
+    with tempfile.NamedTemporaryFile(suffix='.mp3') as temp_file:
+        tts.save(temp_file.name)
+        subprocess.run(['mpg123', '-f', '32000', '-q', temp_file.name], check=True)

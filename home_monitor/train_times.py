@@ -314,9 +314,15 @@ def main():
     if results:
         print(tabulate(results, headers='keys'))
 
-    if args.command == 'refresh':
-        if args.name:
+    if args.command == 'crs-codes':
+        if args.refresh:
             refresh_crs_codes_csv()
+        elif args.code:
+            station_name = get_station_name(crs_code=args.code)
+            if station_name:
+                print(f"CRS Code: {args.code} is for {station_name}")
+            else:
+                print(f"No CRS code found for {args.code}")
 
 
 if __name__ == "__main__":

@@ -4,8 +4,11 @@ pyquery
 pyserial
 pytz
 Pyyaml
+pytest
 requests
-RPi.GPIO
 tabulate
 /home/pi/repositories/zigbeetools/dist/zigbeetools-1.1.0.tar.gz
 zeep
+gtts
+lgpio
+gpiozero

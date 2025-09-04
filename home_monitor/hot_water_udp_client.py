@@ -26,8 +26,8 @@ ADDRESS = ("255.255.255.255", 10000)
 UWL_MESSAGE = "uwl?"
 UWL_RESP = "uwl="
 
-SOCK_TIMEOUT = 1
-SOCK_RETRIES = 5  # 20 retries takes too long
+SOCK_TIMEOUT = 0.5
+SOCK_RETRIES = 3  # 20 retries takes too long
 
 
 def send_with_retries(sock, msg, expected_resp, addr):

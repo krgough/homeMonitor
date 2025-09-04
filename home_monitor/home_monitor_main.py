@@ -23,24 +23,25 @@ import os
 import sys
 import time
 import threading
-import queue
-import re
 import logging.config
+from typing import List, Union
+
+import gpiozero
 
 import zigbeetools.threaded_serial as at
 
-# from home_monitor.udpcomms import hex_temp
-from home_monitor.udpcomms import hot_water_udp_client as udp_cli, hex_temp
-from home_monitor import train_times as tt
-import home_monitor.led_pattern_generator as led
-import home_monitor.button_listener as bl
 import home_monitor.config as cfg
-from home_monitor import hive_alarm
+from home_monitor.config import SystemEvents
+
 import home_monitor.zigbee_hive as zb_hive
 import home_monitor.zigbee_home as zb_home
-import home_monitor.gpio_monitor as gm
-import home_monitor.freezer_alarm_fsm as freezer_alarm
-from home_monitor.voice import Voice
+
+from home_monitor.security_alarm_fsm import SecurityAlarmFSM
+from home_monitor.delay_check_fsm import DelayCheckerFSM
+from home_monitor.freezer_alarm_fsm import FreezerAlarmFSM
+
+from home_monitor import hot_water_udp_client as udp_cli
+from home_monitor import voice
 
 CHECK_THREAD_STOP = threading.Event()
 THREAD_POOL = []
@@ -68,6 +69,13 @@ def get_args():
     )
 
     parser.add_argument(
+        "-w", "--dhw",
+        action="store_true",
+        default=False,
+        help="Enable hot water announcements"
+    )
+
+    parser.add_argument(
         "-r", "--freezer_alarm",
         action="store_true",
         default=False,
@@ -75,7 +83,7 @@ def get_args():
     )
 
     parser.add_argument(
-        "-a", "--house_alarm",
+        "-a", "--security_alarm",
         action="store_true",
         default=False,
         help="Set alarm state based on schedule"
@@ -121,7 +129,7 @@ def configure_logger(logger_name, log_path=None):
     }
 
     file_handler = {
-        "level": "INFO",
+        "level": "DEBUG",
         "class": "logging.handlers.RotatingFileHandler",
         "formatter": "default",
         "filename": log_path,
@@ -156,83 +164,26 @@ def configure_logger(logger_name, log_path=None):
     logging.getLogger("urllib3").setLevel(logging.WARNING)
     logging.getLogger("requests").setLevel(logging.WARNING)
     logging.getLogger("botocore").setLevel(logging.WARNING)
+    logging.getLogger("zeep").setLevel(logging.WARNING)
+    logging.getLogger("gtts").setLevel(logging.WARNING)
 
     return logging.getLogger(logger_name)
 
 
-def check_for_delays(args, voice_strings):
-    """Check for delays and create voice strings for any delays"""
-
-    # Make sure the events used to stop threads are not set
-    CHECK_THREAD_STOP.clear()
-
-    # If led indication requested then start the led controller serial port
-    if args["use_leds"]:
-        led.start_serial_threads(cfg.LED_PORT, cfg.LED_BAUD)
-
-    # If we are using a hive bulb as an indicator then create a data object
-    # for the bulb.
-    if args["use_hive"]:
-        colour_bulb = zb_hive.BulbObject(cfg.get_dev(cfg.INDICATOR_BULB))
-
-    # Get a hive account object for controlling the alarm
-    if args["set_alarm"]:
-        alarm = hive_alarm.HiveAlarm()
-
-    # Loop and sleep between runs
-    while not CHECK_THREAD_STOP.is_set():
-        # Turn off all the LEDs
-        # if use_leds: led.show_pattern(LED_PORT,
-        #                               LED_BAUD,
-        #                               "NO_DELAYS",
-        #                               led.colours.GREEN_DIM)
-
-        # Get the delay data
-        delays = tt.get_delays(args["from_station"], args["to_station"])
-
-        for delay in delays:
-            LOGGER.debug(delay)
-
-        # If we are using the LED board to indicate delays the hanlde that here
-        if args["use_leds"]:
-            led_delay_indication(delays)
-
-        # Hive Indication using an RGB bulb
-        # Turn on alert if we have a delay
-        # Calncel old alerts if no delays or if we exit schedule period
-        if args["use_hive"]:
-            hive_bulb_indication(delays, colour_bulb)
-
-        # Build voice strings for audio announcements and save in a file
-        # We'll play these if a user presses the zigbee button
-        voice_strings.build_voice_string(delays, args["from_station"], args["to_station"])
-
-        # Check and set alarm state according to schedule
-        if args["set_alarm"]:
-            alarm.set_schedule_state()
-
-        # Now sleep
-        time.sleep(DELAY_CHECK_SLEEP_TIME)
-
-
-
-
-
-
-def announce_dhw_level_action(voice_strings):
+def announce_dhw_level_action():
     """Announce the current hot water level"""
     uwl = udp_cli.send_cmd(udp_cli.UWL_MESSAGE, udp_cli.UWL_RESP, udp_cli.ADDRESS)
     msg = f"Hot water is at {uwl}"
-    voice_strings.play([msg])
+    voice.play([msg])
 
 
-def announce_freezer_temp_action(freezer_sensor, voice_strings):
+def announce_freezer_temp_action(home_devs):
     """Announce the current freezer temperature"""
-    if freezer_sensor.temp is not None:
-        msg = f"Freezer Temperature is {freezer_sensor.temp}"
-        voice_strings.play([msg])
+    freezer_sensor = home_devs["Freezer Sensor"]
+    if freezer_sensor.temperature is not None:
+        voice.play(f"Freezer Temperature is {freezer_sensor.temperature}°C")
     else:
-        LOGGER.warning("Freezer temperature not available")
+        voice.play("Freezer Temperature is not available")
 
 
 def doorbell_press_action(colour_bulb):
@@ -252,127 +203,189 @@ def doorbell_press_action(colour_bulb):
     colour_bulb.set_state(*bulb_state)
 
 
-def button_press(cmd, sitt_group, freezer_sensor, voice_strings):
+def button_event_action(event, args, sitt_group, home_devs, fsm_dict):
     """Take actions based on the button press type:
 
     Short press:  Toggle lights on/off
 
-    Double press: Bulb=red, play delay announcements,
-                    return bulb to original state
+    Double press: Play delay announcements
 
-    Long press:   Play water level annoucement,
-                    If bulb_green or bulb_blue then Bulb=white,
-                    toggle freezer alarm enable/disable
-                    Leave bulb white - part of disable
+    Long press:   Play freezer temp and water level annoucements
+                  Set long_press on Freezer alarm (disable)
+                  Set long_press on Security alarm (disable)
     """
-    # short press: Toggle the sitting room group all on or all off
-    if cmd["msgCode"] == "04":
-        LOGGER.info("Button Short Press: Toggling lights")
+
+    if event["event"] == SystemEvents.BUTTON.BTN_SHORT_PRESS:
+        LOGGER.info("Button short press: Toggling lights")
         sitt_group.toggle()
 
-    # double press or long press
-    elif cmd["msgCode"] in ["08", "10"]:
+    elif event["event"] == SystemEvents.BUTTON.BTN_DOUBLE_PRESS:
+        LOGGER.info("Button double press: Announcing delays...")
+        voice.play(voice.build_delay_voice_strings(args))
 
-        # Play train notifications
-        if cmd["msgCode"] == "08":
-            LOGGER.info("Button Double Press: Playing voice strings")
-            voice_strings.play()
-            # play_voice_strings([voice_strings])
+    elif event["event"] == SystemEvents.BUTTON.BTN_LONG_PRESS:
+        LOGGER.info("Button long press: Making announcements and disabling alarms")
 
-        # Play hot water level and toggle the freezer alarm setting
-        elif cmd["msgCode"] == "10":
-            LOGGER.info("Button Long Press: Playing msg")
+        # Make announcements...
+        if args.dhw:
+            announce_dhw_level_action()
 
-            announce_dhw_level(voice_strings)
-            announce_freezer_temp(freezer_sensor, voice_strings)
+        announce_freezer_temp_action(home_devs)
 
-            # Disable freezer alarm by setting long press on the freezer sensor
-            freezer_sensor.long_press_received = True
+        # Set the freezer alarm to disabled.  Will auto re-enable when temp is normal and sensor is online
+        if args.freezer_alarm:
+            freezer_alarm_fsm = fsm_dict["FreezerAlarmFSM"]
+            if freezer_alarm_fsm.state.disabled:
+                voice.play(msgs="Enabling freezer alarm...")
+                freezer_alarm_fsm.state.disabled = False
+            elif freezer_alarm_fsm.state.temp_high:
+                voice.play(msgs="Disabling freezer alarm...")
+                freezer_alarm_fsm.state.enabled = True
+
+        # Toggle the security alarm override
+        if args.security_alarm:
+            security_alarm_fsm = fsm_dict["SecurityAlarmFSM"]
+
+            # Toggle the deactivated state
+            if security_alarm_fsm.state.deactivated:
+                security_alarm_fsm.state.deactivated = False
+            else:
+                security_alarm_fsm.state.deactivated = True
 
 
-def event_thread_handler(args, button_press_queue, hive_indication, voice_strings):
-    """ Handles the period checks:
-     
-    - Check for and indicate train delays
-    - Check freezer alarm state and update as appropriate
-    - Check for house alarm state vs schedule and update as appropriate
+def freezer_event_action(event, hive_devs: List[Union[zb_hive.BulbObject, zb_hive.Group]]):
+    """ Take actions based on freezer events """
+    hive_bulb = hive_devs["hive_bulb"]
+    if event["event"] == cfg.SystemEvents.FREEZER.FREEZER_ALARM_TEMP_HIGH:
+        hive_bulb.set_blue()
+    elif event["event"] == cfg.SystemEvents.FREEZER.FREEZER_ALARM_TEMP_NORMAL:
+        if hive_bulb.is_green() or hive_bulb.is_blue():
+            hive_bulb.set_white_off()
+    elif event["event"] == cfg.SystemEvents.FREEZER.FREEZER_ALARM_SENSOR_OFFLINE_DAY:
+        hive_bulb.set_green()
+    elif event["event"] == cfg.SystemEvents.FREEZER.FREEZER_ALARM_SENSOR_OFFLINE_NIGHT:
+        hive_bulb.set_white_off()
+    elif event["event"] == cfg.SystemEvents.FREEZER.FREEZER_ALARM_DISABLED:
+        hive_bulb.set_white_off()
 
-     """
-    
- 
+
+def security_event_action(event, home_devs, fsm_dict):
+    """ Take action based on security alarm events """
+    # TODO: Add sending emails.
+    security_fsm = fsm_dict["SecurityAlarmFSM"]
+    siren = home_devs["Siren"]
+    if event["event"] == cfg.SystemEvents.SECURITY.ALARM_ARMED:
+        pass
+
+    elif event["event"] == cfg.SystemEvents.SECURITY.ALARM_DISARMED:
+        pass
+
+    elif event["event"] == cfg.SystemEvents.SECURITY.ALARM_TRIGGERED:
+        siren.start_warning()
+
+    elif event["event"] == cfg.SystemEvents.SECURITY.ALARM_DEACTIVATED:
+        siren.stop_warning()
+        voice.play("Security alarm deactivated")
+
+    elif event["event"] == cfg.SystemEvents.SECURITY.ALARM_ACTIVATED:
+        voice.play("Security alarm activated")
+
+    elif event["event"] == cfg.SystemEvents.SECURITY.ALARM_SENSOR_OPEN:
+        security_fsm.state.trigger = True
+
+    elif event["event"] == cfg.SystemEvents.SECURITY.ALARM_SENSOR_CLOSED:
+        pass
+
+    elif event["event"] == cfg.SystemEvents.SECURITY.ALARM_SENSOR_OFFLINE:
+        pass
 
 
-    # Check for delays
+def device_event_action(event, args, fsm_dict):
+    """ Take action based on device events """
+    # TODO: Add sending emails
 
-    # Update the House Alarm state
+    freezer_fsm = fsm_dict["FreezerAlarmFSM"]
+    security_fsm = fsm_dict["SecurityAlarmFSM"]
+    alarm_snsrs = ["Garage RHS", "Garage LHS"]
 
-    # Check freezer alarm events
+    if event["event"] == cfg.SystemEvents.DEVICE.DEVICE_OFFLINE:
+        if event["name"] == "Freezer Sensor":
+            freezer_fsm.state.sensor_online = False
+        elif args.device_name in alarm_snsrs:
+            pass
+            # TODO: Handle alarm sensor offline event
 
-    # Check for button presses
+    elif event["event"] == cfg.SystemEvents.DEVICE.DEVICE_ONLINE:
+        if event["name"] == "Freezer Sensor":
+            freezer_fsm.state.sensor_online = True
+        elif event["name"] in alarm_snsrs:
+            pass
 
-    if args.indication == "hive":
-        colour_bulb = zb_hive.BulbObject(cfg.get_dev(cfg.INDICATOR_BULB))
-        sitt_group = zb_hive.Group([cfg.get_dev(dev) for dev in cfg.SITT_GROUP])
-        freezer_sensor = zb_hive.SensorObject()
-        freezer_alarm = fsm.SensorStateMachine(colour_bulb, freezer_sensor)
+    elif event["event"] == cfg.SystemEvents.DEVICE.DEVICE_TEMP_HIGH:
+        if event["name"] == "Freezer Sensor":
+            freezer_fsm.state.temp_high = True
+        elif event["name"] in alarm_snsrs:
+            pass
 
-    # Main thread loop
+    elif event["event"] == cfg.SystemEvents.DEVICE.DEVICE_TEMP_NORMAL:
+        if event["name"] == "Freezer Sensor":
+            freezer_fsm.state.temp_high = False
+        elif event["name"] in alarm_snsrs:
+            pass
+
+    elif event["event"] == cfg.SystemEvents.SECURITY.ALARM_SENSOR_OPEN:
+        security_fsm.state.trigger = True
+
+    elif event["event"] == cfg.SystemEvents.SECURITY.ALARM_SENSOR_CLOSED:
+        security_fsm.state.trigger = False
+
+
+def train_event_action(event, hive_devs):
+    """ Take action based on train events """
+    hive_bulb = hive_devs["hive_bulb"]
+    if event["event"] == cfg.SystemEvents.TRAIN.DELAYS:
+        hive_bulb.alert = True
+        hive_bulb.set_red()
+    elif event["event"] == cfg.SystemEvents.TRAIN.NO_DELAYS:
+        if hive_bulb.alert is True:
+            hive_bulb.alert = False
+            hive_bulb.set_white_off()
+
+
+def system_event_handler(args, system_event_q, home_devs, hive_devs, fsm_dict):
+    """ Take actions based on system events occurring """
     while True:
-        if not button_press_queue.empty():
-            cmd = button_press_queue.get()
+        while not system_event_q.empty():
+            # Process system events
+            event = system_event_q.get()
 
-            # Handle main button presses
-            # shortPress  = play latest train delay annoucement audio clip
-            # doublePress = play annoucement and briefly change bulb colour
-            # longPress   = play 'robodad' annoucement
-            if cmd["nodeId"] == cfg.BUTTON_NODE_ID:
-                button_press(cmd, sitt_group, freezer_sensor, voice_strings)
+            if event["event"] in cfg.ButtonEvents:
+                button_event_action(
+                    event=event,
+                    args=args,
+                    sitt_group=hive_devs["hive_sitt_group"],
+                    home_devs=home_devs,
+                    fsm_dict=fsm_dict
+                )
 
-            # Handle doorbell button press
-            if cmd["nodeId"] == cfg.BELL_BUTTON_ID:
-                LOGGER.info("Doorbell button press.  Playing doorbell sound.")
-                doorbell_press(colour_bulb)
+            elif event["event"] in cfg.SystemEvents.FREEZER:
+                if args.freezer_alarm:
+                    freezer_event_action(event, hive_devs)
 
-            # # Save the temperature and update the state_machine
-            # if cmd["nodeId"] == cfg.FREEZER_TEMP_ID:
-            #     LOGGER.debug("TEMPERATURE REPORT %s", cmd['temperature'])
-            #     freezer_sensor.temp = cmd['temperature']
-            #     freezer_alarm.on_event()
+            elif event["event"] in cfg.SystemEvents.SECURITY:
+                if args.security_alarm:
+                    security_event_action(event, home_devs, fsm_dict)
 
-            time.sleep(0.1)  # Delay to allow last command to take effect
+            # Online/Offline events - for Security and Freezer Sensors
+            elif event["event"] in cfg.SystemEvents.DEVICE:
+                device_event_action(event, args, fsm_dict)
 
-            # Flush the queue here to avoid lots of bell ringing
-            flush_queue(button_press_queue)
+            elif event["event"] in cfg.SystemEvents.TRAIN:
+                train_event_action(event, hive_devs)
 
-        # If we have a temperature report then update the object
-        # If we have a check-in from the sensor and we have not had a recent
-        # temperature report then attempt to reset the report config
-        while not at.LISTNER_QUEUE.empty():
-            msg = at.LISTNER_QUEUE.get()
+            else:
+                LOGGER.error("Unhandled system event: %s", event)
 
-            # Temperaure report
-            # REPORTATTR:2F28,06,0402,0000,29,08E3
-            regex = "REPORTATTR:[0-9a-fA-F]{4},06,0402,0000,29"
-            if re.match(regex, msg):
-                node_id = msg.split(":")[1][:4]
-                temperature = msg.split(",")[-1]
-                temperature = hex_temp.convert_s16(temperature) / 100
-                freezer_sensor.update_temperature(temperature)
-
-                LOGGER.info("TEMPERATURE, %s, %s", node_id, freezer_sensor.temp)
-
-            # CHECKIN:2F28,06,00
-            regex = "CHECKIN:[0-9a-fA-F]{4},06"
-            if re.match(regex, msg):
-                freezer_sensor.set_temp_rpt_cfg(msg)
-
-        # Update the freezer_sensor object
-        # If disabled and temp has dropped to normal then re-enable the alarm
-        # If no reports for some time the show the offline warning.
-        # If freezer warm the show temperature warning.
-        freezer_alarm.on_event()
-
-        # Sleep to avoid while loop spinning in this thread
         time.sleep(0.1)
 
 
@@ -380,7 +393,7 @@ def check_usb_dongles():
     """Check we have symlinks to correct USB devices in /dev.
     See config.py for instaructions on how to set these up using udevadm.
     """
-    dongles = [cfg.HIVE_ZB_PORT, cfg.ZB_PORT]
+    dongles = [cfg.HIVE_ZB_PORT, cfg.HOME_ZB_PORT]
 
     for dongle in dongles:
         if not os.path.exists(dongle):
@@ -395,10 +408,8 @@ def check_usb_dongles():
 
 def start_thread(thread_func, args, thread_name, thread_pool):
     """Start the thread and return it"""
-    thread = threading.Thread(target=thread_func, args=args)
-    thread.daemon = True
+    thread = threading.Thread(target=thread_func, args=args, name=thread_name, daemon=True)
     thread.start()
-    thread.name = thread_name
     LOGGER.info("%s thread started.", thread_name)
     thread_pool.append(thread)
 
@@ -413,33 +424,49 @@ def main():
 
     args = get_args()
     thread_pool = []
-
-    voice_strings = Voice()
+    system_event_q = cfg.SystemEventQueue()
 
     # Start the Hive Zigbee threads
-    if args["use_hive"]:
-        zb_hive = at.ZigbeeDevice(name="Hive Zigbee", port=cfg.get_dev(cfg.HIVE_ZB_PORT))
-        for thd in zb_hive.thread_pool:
-            thread_pool.append(thd)
+    hive = at.ZigbeeCmdNode(name="Hive Zigbee", port=cfg.HIVE_ZB_PORT)
+    hive_bulb = zb_hive.BulbObject(coordinator=hive, dev=cfg.get_hive_dev("Sitt Colour"))
+    hive_sitt_group = zb_hive.Group(name="Hive Sitt Group", coordinator=hive, device_name_list=cfg.HIVE_SITT_GROUP)
+    hive_devs = {"hive_bulb": hive_bulb, "hive_sitt_group": hive_sitt_group}
 
     # Start the Home Zigbee threads
-    zb_home = at.ZigbeeDevice(name="Home Zigbee", port=cfg.get_dev(cfg.ZB_PORT))
-    for thd in zb_home.thread_pool:
-        thread_pool.append(thd)
+    home = zb_home.ZigbeeHome(name="zb_home", event_q=system_event_q)
 
-    if args["use_gpios"]:
-        start_thread(gm.main, (voice_strings), "GPIO Monitor", thread_pool)
+    # Start the FSMs
+    freezer_alarm_fsm = FreezerAlarmFSM(name="FreezerAlarmFSM", event_q=system_event_q)
+    security_alarm_fsm = SecurityAlarmFSM(name="SecurityAlarmFSM", event_q=system_event_q)
 
-    # Start delay checker thread
-    start_thread(check_for_delays, (args, voice_strings), "Delay checker", thread_pool)
+    delay_checker_fsm = DelayCheckerFSM(
+        name="DelayCheckerFSM",
+        event_q=system_event_q,
+        from_station=args.from_station,
+        to_station=args.to_station
+    )
 
-    # Start the freezer alarm thread
-    if args["freezer_alarm"]:
-        freezer_sensor = zb_home.SensorObject(cfg.FREEZER_TEMP_ID)
-        freezer_alarm = freezer_alarm.SensorStateMachine(
-            zb_hive.BulbObject(cfg.get_dev(cfg.INDICATOR_BULB)), freezer_sensor
-        )
-        start_thread(freezer_alarm.run, (), "Freezer Alarm", thread_pool)
+    # Get a list of all threads so we can monitor them
+    fsm_dict = {
+        "FreezerAlarmFSM": freezer_alarm_fsm,
+        "SecurityAlarmFSM": security_alarm_fsm,
+        "DelayCheckerFSM": delay_checker_fsm
+    }
+    for device in list(fsm_dict.values()) + [hive, home]:
+        for thread in device.thread_pool:
+            thread_pool.append(thread)
+
+    # # Start the event checker thread
+    start_thread(
+        system_event_handler,
+        (args, system_event_q, home.device_list, hive_devs, fsm_dict),
+        "System Event Handler",
+        thread_pool
+    )
+
+    if args.use_gpios:
+        btn = gpiozero.Button(4)
+        btn.when_pressed = lambda: system_event_q.put(cfg.SystemEvents.GPIO.BUTTON_PRESSED, "GPIO_BUTTON")
 
     # Check the threads are all still running
     while True:
@@ -454,4 +481,8 @@ def main():
 
 if __name__ == "__main__":
     LOGGER = configure_logger("home-monitor", cfg.LOGFILE)
+
+    logging.getLogger("home_monitor.zigbee_home").setLevel(logging.INFO)
+    logging.getLogger("zigbeetools").setLevel(logging.INFO)
+    logging.getLogger("home_monitor.train_times").setLevel(logging.INFO)
     main()

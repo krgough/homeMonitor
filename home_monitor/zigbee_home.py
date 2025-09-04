@@ -9,25 +9,20 @@ Manage the devices on the Home Zigbee network (alternative to Hive Zigbee) and h
 """
 from enum import Enum
 import logging
-import queue
 import time
 import threading
+import queue
 
 import zigbeetools.threaded_serial as at
 import zigbeetools.zigbee_clusters as zcl
 import home_monitor.config as cfg
 from home_monitor.config import SystemEvents
 
+
 LOGGER = logging.getLogger(__name__)
 
 
 OFFLINE_TIMEOUT = 60 * 21  # 21 minutes = to allow for 2 reports + 1min
-
-
-class OpenClosedState(Enum):
-    """ WDS Open/Closed States """
-    CLOSED = 0
-    OPEN = 1
 
 
 class LastClickType(Enum):
@@ -55,11 +50,19 @@ MAX_SEND_ATTEMPTS = 3
 SEND_RETRY_TIMEOUT = 5  # seconds
 
 
-def hex_to_signed_int8(hex_value):
-    """Convert hex string to signed int8 using two's complement"""
+def int8_to_dec(hex_value):
+    """Convert hex string signed 8 bit number to decimal"""
     val = int(hex_value, 16)
     if val >= 128:  # If bit 7 is set (negative number)
         val -= 256  # Convert from unsigned to signed
+    return val
+
+
+def int16_to_dec(hex_value):
+    """Convert hex string signed 16 bit number to decimal"""
+    val = int(hex_value, 16)
+    if val >= 32768:  # If bit 15 is set (negative number)
+        val -= 65536  # Convert from unsigned to signed
     return val
 
 
@@ -72,7 +75,7 @@ def parse_message(msg, pattern):
 
 def find_device_by_node_id(node_id, devices):
     """Find a device in the devices dictionary by node_id"""
-    for device in devices:
+    for _, device in devices.items():
         if device.node_id == node_id:
             return device
     return None
@@ -80,13 +83,13 @@ def find_device_by_node_id(node_id, devices):
 
 def find_device_by_eui(eui, devices):
     """Find a device in the devices dictionary by eui."""
-    for device in devices:
+    for _, device in devices.items():
         if device.eui == eui:
             return device
     return None
 
 
-def zb_update_worker(coordinator: at.ZigbeeDevice, device_list: list):
+def zb_update_worker(coordinator: at.ZigbeeCmdNode, device_list: list):
     """Handle incoming Zigbee messages and update the device """
     while True:
 
@@ -100,17 +103,17 @@ def zb_update_worker(coordinator: at.ZigbeeDevice, device_list: list):
                     data = parse_message(msg, pattern)
                     data["msg_type"] = pattern["name"]
                     LOGGER.debug("Matched pattern: %s, node_id: %s", pattern["name"], data["node_id"])
-                    handle_attribute_update(coordinator, data, device_list)
+                    handle_message(coordinator, data, device_list)
                     break
 
         # Check if any devices have gone offline
-        for device in device_list:
+        for _, device in device_list.items():
             device.online_offline_event()
 
-        time.sleep(0.1)
+        time.sleep(1)
 
 
-def handle_attribute_update(coordinator: at.ZigbeeDevice, msg_data: dict, device_list: list):
+def handle_message(coordinator: at.ZigbeeCmdNode, msg_data: dict, device_list: list):
     """ Get the device by node_id
     If node_id not found then try to get the eui and lookup the device by eui and update the node_id
     Then update the device with the attribute report
@@ -123,6 +126,7 @@ def handle_attribute_update(coordinator: at.ZigbeeDevice, msg_data: dict, device
         if resp_state:
             dev = find_device_by_eui(resp_value, device_list)
             if dev:
+                LOGGER.info("Found device %s with eui %s", dev.name, resp_value)
                 dev.node_id = msg_data['node_id']  # Update the node_id if found by eui
             else:
                 LOGGER.error("Device with eui %s not found in device list", resp_value)
@@ -155,8 +159,9 @@ class ZigbeeDevice:
         self.name = name
         self.eui = eui
         self.node_id = None  # Node ID will be set when the device is paired
-        self.event_q = event_q
         self.online = False  # Default state, can be overridden by subclasses
+        self._event_q = event_q
+        self.temp_high = False
 
     def attribute_report_event(self, cluster, attribute, value):
         """Handle attribute report events"""
@@ -164,13 +169,18 @@ class ZigbeeDevice:
     def zone_status_event(self, zone_status):
         """Handle zone status events"""
 
+    def put_event(self, event):
+        """ Put and event on the event queue """
+        LOGGER.info('Putting event %s on queue from %s', event, self.name)
+        self._event_q.put(event, self.name)
+
 
 class WindowDoorSensor(ZigbeeDevice):
     """Class for handling Window/Door Sensors"""
 
     def __init__(self, eui, name, event_q, freezer=False, alarm=False):
         super().__init__(eui, name, event_q)
-        self.state = OpenClosedState.CLOSED  # Default state
+        self.open = False
         self.battery_voltage = 0
         self.temperature = 0
         self.freezer_sensor = freezer
@@ -187,17 +197,15 @@ class WindowDoorSensor(ZigbeeDevice):
         if self.online:
             if self.last_temperature_report < (time.time() - OFFLINE_TIMEOUT):
                 self.online = False
+                self.event_q.put(SystemEvents.DEVICE.DEVICE_OFFLINE, self.name)
                 LOGGER.warning("%s: offline", self.name)
-                if self.freezer_sensor:
-                    self.event_q.put("FREEZER_SENSOR_OFFLINE")
 
         # Transition to online
         else:
             if self.last_temperature_report >= (time.time() - OFFLINE_TIMEOUT):
                 self.online = True
+                self.put_event(SystemEvents.DEVICE.DEVICE_ONLINE)
                 LOGGER.info("%s: online", self.name)
-                if self.freezer_sensor:
-                    self.event_q.put("FREEZER_SENSOR_ONLINE")
 
     def attribute_report_event(self, cluster, attribute, value):
         """Set the battery voltage of the device"""
@@ -205,58 +213,50 @@ class WindowDoorSensor(ZigbeeDevice):
         if cluster == "Power Configuration Cluster" and attribute == "batteryVoltage":
             self.battery_voltage = int(value, 16) / 10
             self.last_battery_report = time.time()
-            LOGGER.info("%s: Battery voltage %s", self.name, self.battery_voltage)
+            LOGGER.info("%s: Battery voltage %sv", self.name, self.battery_voltage)
 
         elif cluster == "Temperature Measurement Cluster" and attribute == "measuredValue":
-            new_temperature = int(value, 16) / 100.0
-            LOGGER.info("%s: Temperature %.2f°C", self.name, new_temperature)
+            self.temperature = int16_to_dec(value) / 100
+            LOGGER.info("%s: Temperature %.2f°C", self.name, self.temperature)
 
             self.last_temperature_report = time.time()
-            self.online_offline_event()
 
-            self.temperature_event(new_temperature)
-            self.temperature = new_temperature
+            if self.freezer_sensor:
+                if self.temperature > cfg.FREEZER_TEMP_THOLD:
+                    self.temp_high = True
+                    self.put_event(SystemEvents.DEVICE.DEVICE_TEMP_HIGH)
+                    LOGGER.warning("%s: Freezer temperature high %.2f°C", self.name, self.temperature)
+                elif self.temp_high and self.temperature <= cfg.FREEZER_TEMP_THOLD:
+                    self.temp_high = False
+                    self.put_event(SystemEvents.DEVICE.DEVICE_TEMP_NORMAL)
+                    LOGGER.info("%s: Freezer temperature normal %.2f°C", self.name, self.temperature)
 
         else:
             LOGGER.error("Unhandled attribute update for %s: %s, %s = %s", self.name, cluster, attribute, value)
 
     def zone_status_event(self, zone_status):
         """Handle zone status events"""
-        # Bitmask AND zone status to deterine if zone is open/closed
-        new_state = OpenClosedState(int(zone_status) & 0x01)
+        # Bitmask AND zone_status to deterine if zone is open/closed
+        new_state = bool(int(zone_status) & 0x01)
 
-        if self.state == OpenClosedState.CLOSED and new_state == OpenClosedState.OPEN:
+        if self.open is False and new_state is True:
             LOGGER.info("%s: open", self.name)
             if self.alarm_sensor:
-                self.event_q.put(SystemEvents.ALARM_SENSOR_OPEN)
-            self.state = new_state
+                self.put_event(SystemEvents.SECURITY.ALARM_SENSOR_OPEN)
+            self.open = True
 
-        elif self.state == OpenClosedState.OPEN and new_state == OpenClosedState.CLOSED:
+        elif self.open is True and new_state is False:
             LOGGER.info("%s: closed", self.name)
             if self.alarm_sensor:
-                self.event_q.put(SystemEvents.ALARM_SENSOR_CLOSED)
-            self.state = new_state
-
-    def temperature_event(self, new_temperature):
-
-        """ Handle sending freezer temperature events """
-        if self.freezer_sensor:
-            # Transition to Temp Normal to Temp High
-            if self.temperature < cfg.FREEZER_TEMP_THOLD and new_temperature > cfg.FREEZER_TEMP_THOLD:
-                LOGGER.warning("%s: Freezer temperature is above threshold: %.2f °C", self.name, new_temperature)
-                self.event_q.put(SystemEvents.FREEZER_ALARM_TEMP_HIGH)
-
-            # Transition from High Temp to Temp Normal
-            if self.temperature > cfg.FREEZER_TEMP_THOLD and new_temperature < cfg.FREEZER_TEMP_THOLD:
-                LOGGER.warning("%s: Freezer temperature is below threshold: %.2f °C", self.name, self.temperature)
-                self.event_q.put(SystemEvents.FREEZER_ALARM_TEMP_NORMAL)
+                self.put_event(SystemEvents.SECURITY.ALARM_SENSOR_CLOSED)
+            self.open = False
 
 
 class Siren(ZigbeeDevice):
     """ Class for handling Siren devices """
 
     def __init__(self, eui, name, event_q):
-        super().__init__(eui, name, event_q=event_q)
+        super().__init__(eui, name, event_q)
         self.warning_state = False  # Whether or not the siren is going off
         self.battery_voltage = None
         self.battery_temperature = None
@@ -274,7 +274,7 @@ class Siren(ZigbeeDevice):
             LOGGER.info("%s: Battery level %s", self.name, self.battery_voltage)
 
         elif cluster == "Basic Cluster" and attribute == "batteryTemperature":
-            self.battery_temperature = hex_to_signed_int8(value)
+            self.battery_temperature = int8_to_dec(value)
             self.last_battery_temperature_report = time.time()
             LOGGER.info("%s: Battery temperature %s°C", self.name, self.battery_temperature)
 
@@ -292,28 +292,30 @@ class Siren(ZigbeeDevice):
         if self.online:
             if self.last_battery_report < (time.time() - OFFLINE_TIMEOUT):
                 self.online = False
+                self.put_event(SystemEvents.DEVICE.DEVICE_OFFLINE)
                 LOGGER.warning("%s: offline", self.name)
 
         # Transition to online
         else:
             if self.last_battery_report >= (time.time() - OFFLINE_TIMEOUT):
                 self.online = True
+                self.put_event(SystemEvents.DEVICE.DEVICE_ONLINE)
                 LOGGER.info("%s: online", self.name)
 
     def start_warning(self):
         """ Start the siren warning """
-        LOGGER.warning("%s: siren activated", self.name)
+        LOGGER.warning("%s: siren warning started", self.name)
 
     def stop_warning(self):
         """ Stop the siren warning """
-        LOGGER.warning("%s: siren deactivated", self.name)
+        LOGGER.warning("%s: siren warning stopped", self.name)
 
 
 class Button(ZigbeeDevice):
     """ Class for handling Button devices """
 
     def __init__(self, eui, name, event_q):
-        super().__init__(eui, name, event_q=event_q)
+        super().__init__(eui, name, event_q)
         self.last_click_type = None
         self.battery_voltage = None
 
@@ -328,6 +330,12 @@ class Button(ZigbeeDevice):
         if cluster == "On/Off Cluster" and attribute == "lastClickType":
             self.last_click_type = LastClickType(value)
             LOGGER.info("%s: Button Click %s", self.name, self.last_click_type.name)
+            if self.last_click_type == LastClickType.SHORT_PRESS:
+                self.put_event(SystemEvents.BUTTON.BTN_SHORT_PRESS)
+            elif self.last_click_type == LastClickType.DOUBLE_PRESS:
+                self.put_event(SystemEvents.BUTTON.BTN_DOUBLE_PRESS)
+            elif self.last_click_type == LastClickType.LONG_PRESS:
+                self.put_event(SystemEvents.BUTTON.BTN_LONG_PRESS)
         else:
             LOGGER.error("Unhandled attribute update for %s: %s, %s = %s", self.name, cluster, attribute, value)
 
@@ -346,58 +354,55 @@ class Button(ZigbeeDevice):
                 LOGGER.info("%s: online", self.name)
 
 
-def build_device_list(event_q):
+def build_device_dict(devices, event_q):
     """ Use the config file to build the wanted device object instances """
-    devices = []
-    for dev in cfg.HOME_ZB_DEVICES:
+    if devices is None:
+        devices = cfg.HOME_ZB_DEVICES
+    devs = {}
+
+    for dev in devices:
+
         if dev["type"] == "WindowDoorSensor":
-            devices.append(
-                WindowDoorSensor(
-                    eui=dev["eui"],
-                    name=dev["name"],
-                    event_q=event_q,
-                    alarm=dev["alarm"],
-                    freezer=dev["freezer"]
-                )
+            devs[dev["name"]] = WindowDoorSensor(
+                eui=dev["eui"],
+                name=dev["name"],
+                event_q=event_q,
+                alarm=dev["alarm"],
+                freezer=dev["freezer"],
             )
+
         elif dev["type"] == "Siren":
-            devices.append(
-                Siren(
-                    eui=dev["eui"],
-                    name=dev["name"],
-                    event_q=event_q
-                )
-            )
+            devs[dev["name"]] = Siren(eui=dev["eui"], name=dev["name"], event_q=event_q)
+
         elif dev["type"] == "Button":
-            devices.append(
-                Button(
-                    eui=dev["eui"],
-                    name=dev["name"],
-                    event_q=event_q
-                )
-            )
+            devs[dev["name"]] = Button(eui=dev["eui"], name=dev["name"], event_q=event_q)
+
         else:
             LOGGER.error("Unknown device type in config.py %s for eui %s", dev["type"], dev["eui"])
 
-    return devices
+    return devs
+
+
+class ZigbeeHome:
+    """ Class for interacting with zigbee devices on 'home' network """
+    def __init__(self, name, event_q):
+
+        self.name = name
+        self.event_q = event_q
+        self.last_battery_report = 0
+
+        home = at.ZigbeeCmdNode(name="zb_home", port=cfg.HOME_ZB_PORT)
+        self.device_list = build_device_dict(cfg.HOME_ZB_DEVICES, event_q=self.event_q)
+
+        self.thread = threading.Thread(target=zb_update_worker, args=(home, self.device_list), daemon=True)
+        self.thread.start()
+        self.thread_pool = [self.thread]
 
 
 def tests():
     """ Entry point for tests """
 
-    event_q = queue.Queue()
-
-    device_list = build_device_list(event_q)
-
-    zb_home = at.ZigbeeDevice(name="zb_home", port=cfg.HOME_ZB_PORT)
-
-    zb_home_update_thread = threading.Thread(
-        target=zb_update_worker,
-        args=(zb_home, device_list),
-        daemon=True,
-        name='zb_home_update_thread',
-    )
-    zb_home_update_thread.start()
+    ZigbeeHome(name="zb_home", event_q=queue.Queue())
 
     while True:
         time.sleep(1)

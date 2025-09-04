@@ -4,6 +4,29 @@
 Pair the device manually using the command line.  at+pjoin:ff
 Grab the EUI of the device, then use this script to set the cicie
 
+Button pairing notes:
+
+Bind to on/off cluster.
+Write to the button press type cfg attribute to turn on all button press types.
+
+# Only need these two
+at+bind:<nodeId>,3,<BUTTON EUI>,01,0006,<COORD EUI>,01
+
+at+rawzcl:<nodeId>,01,0006,0C3910010200FD181C
+                           | |   | | |   | |
+                           | |   | | |   | 1C = Bits2,3,4 = Short,Double,Long Press
+                           | |   | | |   18 = Attrribute type
+                           | |   | | FD00 = Attribute ID
+                           | |   | 02 = Command ID (write attribute)
+                           | |   01 = Sequence number
+                           | 1039 = Manufacturer code
+                           0C = Frame Control, General Control frame, Dir serv to client, manufacturer specific
+
+# Set attribute report configuration for the custom attribute
+# (note it's a server to client)
+at+cfgrpt:<nodeId>,,0,0001,0,0020,20,0E10,0E10,01
+at+rawzcl:<nodeId>,0006,0C391001060003FD1801000000
+
 """
 
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
@@ -26,10 +49,11 @@ def get_args():
 
     parser = ArgumentParser(
         description=dedent("""
-            Siren Setup Tool
+            Device Pairing Tool
 
-            To setup the siren we need to know the Node ID.
-            We then write the CICIE EUI to the device and set up the bindings and check-in interval.
+            To setup the device:
+            - Put the device in pairing mode and run the script.
+            - Script sets the required cluster bindings and attribute reporting configurations
         """),
         formatter_class=RawDescriptionHelpFormatter
     )
@@ -70,18 +94,7 @@ def print_simple_descriptor(sd_resp_value, ep_id):
             print(f"{field:10} = {sd_resp_value[field]}")
 
 
-# def hex_str(value, digits=2):
-#     """ Convert to a hex string """
-#     return f"{value:0{digits}x}"
-
-
-# def flush_queue(my_queue):
-#     """ Flush the given Queue """
-#     while not my_queue.empty():
-#         my_queue.get()
-
-
-def wds_pairing(coordinator: at.ZigbeeDevice, node_id):
+def wds_pairing(coordinator: at.ZigbeeCmdNode, node_id):
     """ Pair the WDS device with the coordinator """
     # Get the EUIs for the co-ordinator and the device under test
     resp_state, resp_code, resp = coordinator.at_cmds.get_eui("0000", "0000")
@@ -190,7 +203,7 @@ def wds_pairing(coordinator: at.ZigbeeDevice, node_id):
     print("WDS device paired successfully.")
 
 
-def siren_pairing(coordinator: at.ZigbeeDevice, node_id):
+def siren_pairing(coordinator: at.ZigbeeCmdNode, node_id):
     """ Send a list of messages """
     # Get the EUIs for the co-ordinator and the device under test
     resp_state, resp_code, resp = coordinator.at_cmds.get_eui("0000", "0000")
@@ -257,7 +270,7 @@ def siren_pairing(coordinator: at.ZigbeeDevice, node_id):
     print("CIE EUI set successfully.")
 
 
-def get_node_id(coordinator:  at.ZigbeeDevice, dev_type: Literal["FFD", "SED"]) -> Optional[str]:
+def get_node_id(coordinator:  at.ZigbeeCmdNode, dev_type: Literal["FFD", "SED"]) -> Optional[str]:
     """ Open the network to allow the device to join and get the node id of the joining device """
 
     # Open the network
@@ -282,7 +295,7 @@ def main():
         args.dev_type = "SED"
 
     # Start the serial port Rx and Tx threads
-    coordinator = at.ZigbeeDevice(name="zb_home", port=args.port, baud=args.baud)
+    coordinator = at.ZigbeeCmdNode(name="zb_home", port=args.port, baud=args.baud)
 
     if not args.node_id:
         node_id = get_node_id(coordinator=coordinator, dev_type=args.dev_type)

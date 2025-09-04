@@ -18,7 +18,6 @@ import zigbeetools.threaded_serial as at
 import home_monitor.config as cfg
 
 LOGGER = logging.getLogger(__name__)
-RETRY_TIMEOUT = 0.5
 
 
 class OnOffObject:
@@ -28,7 +27,7 @@ class OnOffObject:
     # Only one instance at a time can send/receive commands
     lock = threading.RLock()
 
-    def __init__(self, coordinator: at.ZigbeeDevice, dev: dict):
+    def __init__(self, coordinator: at.ZigbeeCmdNode, dev: dict):
         self.coordinator = coordinator
         self.name = dev['name']
         self.eui = dev['eui']
@@ -122,7 +121,7 @@ class BulbObject(OnOffObject):
         # If the bulb is red when we are initialising then likely this means we
         # crashed out and left it red so we make set the alert state now and it
         # will be cleared later if app confirms no alert state
-        self.alert_active = self.is_red()
+        self.alert = False
 
     def get_color_mode(self):
         """ Find out if bulb is in colour mode or in white mode """
@@ -381,8 +380,8 @@ class BulbObject(OnOffObject):
 
 class Group:
     """ Class for managing a group of devices """
-    def __init__(self, coordinator, device_name_list):
-
+    def __init__(self, name, coordinator, device_name_list):
+        self.name = name
         self.nodes = []
         for dev in device_name_list:
             self.nodes.append(OnOffObject(coordinator, cfg.get_hive_dev(dev)))
@@ -449,14 +448,15 @@ class SensorObject:
 def main():
     """ Main Program - runs tests on a colour bulb and a group of devices """
 
-    hive_zb = at.ZigbeeDevice(name="zb_hive", port=cfg.HIVE_ZB_PORT, baud=cfg.ZB_BAUD)
-    group = Group(hive_zb, cfg.HIVE_SITT_GROUP)
+    hive_zb = at.ZigbeeCmdNode(name="zb_hive", port=cfg.HIVE_ZB_PORT, baud=cfg.ZB_BAUD)
+    group = Group("hive_group", hive_zb, cfg.HIVE_SITT_GROUP)
     colour_bulb = BulbObject(hive_zb, cfg.get_hive_dev("Sitt Colour"))
 
-    test_delay = 5
+    test_delay = 10
 
     LOGGER.info("Getting colour bulb state (so we can reset at the end)")
     state = colour_bulb.get_state()
+    time.sleep(test_delay)
 
     LOGGER.info("Set bulb to white")
     colour_bulb.set_white(colour_temp=2700, value=100)
@@ -489,6 +489,6 @@ def main():
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-    at.LOGGER.setLevel(logging.WARNING)
+    logging.basicConfig(level=logging.DEBUG)
+    at.LOGGER.setLevel(logging.DEBUG)
     main()

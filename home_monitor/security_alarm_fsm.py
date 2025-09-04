@@ -1,13 +1,9 @@
 #!/usr/bin/env python3
 
 """
+
 Hive Alarm Class
-
 Class object to handle setting the alarm state according to a schedule
-
-We save the sched_state as a variable and we check on each iteration
-if the schedule state should change.  If it does then we send the
-relevant state change command to Hive.  We don't check if it works.
 
 """
 
@@ -26,17 +22,19 @@ class AlarmStates(Enum):
     ARMED = "armed"
     DISARMED = "disarmed"
     TRIGGERED = "triggered"
-    OVERRIDE = "override"
+    DEACTIVATED = "deactivated"
 
 
 # pylint: disable=too-few-public-methods, too-many-arguments, too-many-positional-arguments
 class State:
     """ Provides utility functions for the individual states within the state machine. """
 
-    def __init__(self, override, trigger, siren):
-        self.override = override
+    def __init__(self, name, event_q, deactivated, trigger, schedule):
+        self.name = name
+        self.event_q = event_q
+        self.deactivated = deactivated
         self.trigger = trigger
-        self.siren = siren
+        self.schedule = schedule
 
         LOGGER.info('Entering state: %s', str(self))
 
@@ -45,11 +43,15 @@ class State:
 
     def schedule_state(self):
         """Get the wanted state based on the schedule"""
-        if cfg.schedule_check(cfg.SECURITY_ALARM_ON_SCHEDULE):
+        if cfg.schedule_check(self.schedule):
             schedule_state = AlarmStates.ARMED
         else:
             schedule_state = AlarmStates.DISARMED
         return schedule_state
+
+    def toggle_deactivate(self):
+        """ Toggle the deactivated state """
+        self.deactivated = not self.deactivated
 
     def __repr__(self):
         """Usess the __str__ method to describe the State."""
@@ -59,9 +61,18 @@ class State:
         """Returns the name of the State."""
         return self.__class__.__name__
 
+    def event_put(self, event):
+        """Put an event onto the event queue."""
+        LOGGER.info('Putting event %s on queue from %s', event, self.name)
+        self.event_q.put(event, self.name)
+
 
 class Disarmed(State):
     """ State when the alarm is disarmed """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.event_put(cfg.SecurityEvents.ALARM_DISARMED)
 
     def on_event(self):
         """Handle events when the alarm is disarmed."""
@@ -69,10 +80,10 @@ class Disarmed(State):
         # Check if schedule wants us to be armed
         schedule_state = self.schedule_state()
 
-        if self.override:
-            return Override
+        if self.deactivated:
+            return Deactivated
 
-        elif schedule_state == AlarmStates.ARMED:
+        if schedule_state == AlarmStates.ARMED:
             return Armed
 
         return self
@@ -81,19 +92,23 @@ class Disarmed(State):
 class Armed(State):
     """ State when the alarm is armed """
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.event_put(cfg.SecurityEvents.ALARM_ARMED)
+
     def on_event(self):
         """Handle events when the alarm is armed."""
 
         # Check if schedule wants us to be disarmed
         schedule_state = self.schedule_state()
 
-        if self.override:
-            return Override
+        if self.deactivated:
+            return Deactivated
 
-        elif schedule_state == AlarmStates.DISARMED:
+        if schedule_state == AlarmStates.DISARMED:
             return Disarmed
 
-        elif self.trigger:
+        if self.trigger:
             return Triggered
 
         return self
@@ -106,7 +121,7 @@ class Triggered(State):
 
         # Start a siren warning on entry to this state
         LOGGER.warning("ALARM TRIGGERED. SIREN ACTIVATED")
-        self.siren.start_warning()
+        self.event_put(cfg.SecurityEvents.ALARM_TRIGGERED)
 
         # Cancel the trigger
         self.trigger = False
@@ -118,40 +133,48 @@ class Triggered(State):
         if schedule_state == AlarmStates.DISARMED:
             return Disarmed
 
-        elif self.override:
-            return Override
+        if self.deactivated:
+            return Deactivated
 
         return self
 
 
-class Override(State):
-    """ State when we want to overide and warnings or modes """
+class Deactivated(State):
+    """ State when we want to deactivate any warnings or mode changes """
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-
-        # Turn off any warnings
-        self.siren.stop_warning()
+        self.event_put(cfg.SecurityEvents.ALARM_DEACTIVATED)
 
     def on_event(self):
-        """ Handle events when in override """
-        if not self.override:
-            # If we are no longer overriding then we go back to disarmed
+        """ Handle events when in deactivated """
+        # If we are no longer deactivated then we go back to disarmed
+        if not self.deactivated:
+            self.event_put(cfg.SecurityEvents.ALARM_ACTIVATED)
             return Disarmed
         return self
 
 
-# pylint: disable=too-few-public-methods
 class SecurityAlarmFSM():
     """Class to manage the Security Alarm state based on a schedule
 
-    BUTTON_LONG_PRESS toggles the override state.
-    If an override is set then state is set to DISARMED and we silence any warning
+    BUTTON_LONG_PRESS toggles the deactivated state.
+    If `deactivated` is set then state is set to DEACTIVATED and we silence any warning
 
     """
-    def __init__(self, name, siren):
+    def __init__(self, name, event_q, schedule=None):
 
         self.name = name
-        self.state = Disarmed(override=False, trigger=False, siren=siren)
+        self.event_q = event_q
+        if schedule is None:
+            schedule = cfg.SECURITY_ALARM_ON_SCHEDULE
+
+        self.state = Disarmed(
+            name=self.name,
+            event_q=self.event_q,
+            deactivated=False,
+            trigger=False,
+            schedule=schedule
+        )
 
         fsm_thread = threading.Thread(target=fsm_worker, args=(self,), daemon=True)
         fsm_thread.start()
@@ -169,9 +192,11 @@ class SecurityAlarmFSM():
         # If a next state is not current state then initialise the new state
         if next_state != self.state:
             self.state = next_state(
-                override=self.state.override,
+                name=self.name,
+                event_q=self.state.event_q,
+                deactivated=self.state.deactivated,
                 trigger=self.state.trigger,
-                siren=self.state.siren
+                schedule=self.state.schedule
             )
 
 
@@ -180,93 +205,3 @@ def fsm_worker(alarm_fsm: SecurityAlarmFSM):
     while True:
         alarm_fsm.on_event()
         time.sleep(0.1)
-
-
-class Siren:
-    """ Class to act a a siren obeject for testing only """
-    def __init__(self):
-        pass
-
-    def start_warning(self):
-        """Send a warning signal"""
-        LOGGER.info("Siren activated")
-
-    def stop_warning(self):
-        """Stop the siren warning"""
-        LOGGER.info("Siren deactivated")
-
-
-def tests():
-    """ Test Hive Alarm """
-
-    alarm = SecurityAlarmFSM(name="Hive Alarm", siren=Siren())
-
-    # In DISARMED check that setting override has no effect
-    assert isinstance(alarm.state, Disarmed)
-    time.sleep(2)
-    assert isinstance(alarm.state, Disarmed)
-    LOGGER.info("Setting override")
-    alarm.state.override = True
-    time.sleep(2)
-    assert isinstance(alarm.state, Override)
-    LOGGER.info("Cancelling override")
-    alarm.state.override = False
-    time.sleep(2)
-    assert isinstance(alarm.state, Disarmed)
-
-    # Wait for Schedule to set us in armed
-    LOGGER.info("Waiting for schedule to set alarm state to ARMED")
-    while True:
-        if isinstance(alarm.state, Armed):
-            break
-        time.sleep(1)
-
-    LOGGER.info("Setting override")
-    alarm.state.override = True
-    time.sleep(2)
-    assert isinstance(alarm.state, Override)
-
-    LOGGER.info("Clear override during ARMED state")
-    alarm.state.override = False
-    time.sleep(2)
-    assert isinstance(alarm.state, Armed)
-
-    LOGGER.info("Waiting for Schedule to return us to DISARMED")
-    while True:
-        if isinstance(alarm.state, Disarmed):
-            break
-        time.sleep(1)
-
-    LOGGER.info("Wait for schedule to return us to ARMED")
-    while True:
-        if isinstance(alarm.state, Armed):
-            break
-        time.sleep(1)
-
-    LOGGER.info("Trigger during ARMED")
-    alarm.state.trigger = True
-    time.sleep(2)
-    assert isinstance(alarm.state, Triggered)
-
-    LOGGER.info("Set override during TRIGGERED")
-    alarm.state.override = True
-    time.sleep(2)
-    assert isinstance(alarm.state, Override)
-
-    LOGGER.info("Clear override during TRIGGERED")
-    alarm.state.override = False
-    alarm.state.trigger = True
-    time.sleep(2)
-    assert isinstance(alarm.state, Triggered)
-
-    LOGGER.info("Waiting for schedule to return us to Disarmed")
-    while True:
-        if isinstance(alarm.state, Disarmed):
-            break
-        time.sleep(1)
-    assert isinstance(alarm.state, Disarmed)
-
-
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.DEBUG)
-    tests()
