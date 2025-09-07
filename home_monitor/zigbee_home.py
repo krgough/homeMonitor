@@ -155,13 +155,23 @@ def handle_message(coordinator: at.ZigbeeCmdNode, msg_data: dict, device_list: l
 class ZigbeeDevice:
     """Base class for Zigbee devices"""
 
-    def __init__(self, eui, name, event_q):
-        self.name = name
-        self.eui = eui
-        self.node_id = None  # Node ID will be set when the device is paired
-        self.online = False  # Default state, can be overridden by subclasses
+    # We must aquire a lock before using the at commands
+    # Only one instance at a time can send/receive commands
+    lock = threading.RLock()
+
+    def __init__(self, coordinator: at.ZigbeeCmdNode, dev: dict, event_q: queue.Queue):
+        self.coordinator = coordinator
         self._event_q = event_q
+
+        self.name = dev["name"]
+        self.eui = dev["eui"]
+        self.ep_id = dev["ep_id"]
+
+        self.online = False
         self.temp_high = False
+
+        self.node_id = None  # We will set this when we dicover the node
+        self.node = None  # Placeholder until we find the node
 
     def attribute_report_event(self, cluster, attribute, value):
         """Handle attribute report events"""
@@ -174,17 +184,62 @@ class ZigbeeDevice:
         LOGGER.info('Putting event %s on queue from %s', event, self.name)
         self._event_q.put(event, self.name)
 
+    def exec_zb_cmd(self, zb_func, *args):
+        """ Wrapper for at commands
+
+            In order to handle offline devices or other command failures we wrap the
+            zigbee command calls with this handler.
+
+            If we have no node_id then we try to find one before executing the command.
+
+            If a command fails then device is either offline or node_id has changed so
+            we set node_id to None and fail gracefully so that the next command call
+            results in us trying to find the node_id again.
+
+        """
+        # If node is not initialised then try to find the node_id and setup
+        # the node object.
+
+        # We grab a thread lock to try and make each at command atomic
+
+        with self.lock:
+            if self.node is None:
+                LOGGER.info("Renewing node_id for %s", self.name)
+                resp_state, _, resp_value = self.coordinator.at_cmds.get_id(self.eui)
+
+                if resp_state:
+                    self.node_id = resp_value
+                    self.node = at.node_object(node_id=self.node_id, ep_id=self.ep_id, manuf_id=None, eui=self.eui)
+                else:
+                    LOGGER.error("ERROR: Node ID was not found. %s", self.name)
+                    # LOGGER.error(resp_value)
+                    return None
+
+            # Try to execute the command
+            # If we fail then destroy the node object so that we re-initialise
+            # on the next command attempt.
+            resp_value = None
+            if self.node:
+                resp_status, _, resp_value = zb_func(self.node, *args)
+                if not resp_status:
+                    LOGGER.error("Error in %s", zb_func)
+                    self.node_id = None
+                    self.node = None
+                    return None
+
+        return resp_value
+
 
 class WindowDoorSensor(ZigbeeDevice):
     """Class for handling Window/Door Sensors"""
 
-    def __init__(self, eui, name, event_q, freezer=False, alarm=False):
-        super().__init__(eui, name, event_q)
+    def __init__(self, coordinator, dev, event_q):
+        super().__init__(coordinator, dev, event_q)
         self.open = False
         self.battery_voltage = 0
         self.temperature = 0
-        self.freezer_sensor = freezer
-        self.alarm_sensor = alarm
+        self.freezer_sensor = dev["freezer"]
+        self.alarm_sensor = dev["alarm"]
 
         self.last_checkin = 0
         self.last_battery_report = 0
@@ -255,8 +310,8 @@ class WindowDoorSensor(ZigbeeDevice):
 class Siren(ZigbeeDevice):
     """ Class for handling Siren devices """
 
-    def __init__(self, eui, name, event_q):
-        super().__init__(eui, name, event_q)
+    def __init__(self, coordinator, dev, event_q):
+        super().__init__(coordinator, dev, event_q)
         self.warning_state = False  # Whether or not the siren is going off
         self.battery_voltage = None
         self.battery_temperature = None
@@ -305,20 +360,37 @@ class Siren(ZigbeeDevice):
     def start_warning(self):
         """ Start the siren warning """
         LOGGER.warning("%s: siren warning started", self.name)
+        self.warning_state = True
+        self.exec_zb_cmd(
+            self.coordinator.iaswd_cmds.start_warning,
+            {
+                "node": self.node,
+                "mode": zcl.WarningMode.STOP,
+                "sound_level": zcl.SirenLevel.LOW,
+                "strobe_level": zcl.SirenLevel.HIGH,
+                "duration": 5
+            }
+        )
 
     def stop_warning(self):
         """ Stop the siren warning """
         LOGGER.warning("%s: siren warning stopped", self.name)
+        self.warning_state = False
+        self.exec_zb_cmd(
+            self.coordinator.iaswd_cmds.stop_warning,
+            {
+                "node": self.node,
+            }
+        )
 
 
 class Button(ZigbeeDevice):
     """ Class for handling Button devices """
 
-    def __init__(self, eui, name, event_q):
-        super().__init__(eui, name, event_q)
+    def __init__(self, coordinator, dev, event_q):
+        super().__init__(coordinator, dev, event_q)
         self.last_click_type = None
         self.battery_voltage = None
-
         self.last_battery_report = 0
 
     def attribute_report_event(self, cluster, attribute, value):
@@ -354,7 +426,7 @@ class Button(ZigbeeDevice):
                 LOGGER.info("%s: online", self.name)
 
 
-def build_device_dict(devices, event_q):
+def build_device_dict(coordinator, devices, event_q):
     """ Use the config file to build the wanted device object instances """
     if devices is None:
         devices = cfg.HOME_ZB_DEVICES
@@ -363,19 +435,13 @@ def build_device_dict(devices, event_q):
     for dev in devices:
 
         if dev["type"] == "WindowDoorSensor":
-            devs[dev["name"]] = WindowDoorSensor(
-                eui=dev["eui"],
-                name=dev["name"],
-                event_q=event_q,
-                alarm=dev["alarm"],
-                freezer=dev["freezer"],
-            )
+            devs[dev["name"]] = WindowDoorSensor(coordinator=coordinator, dev=dev, event_q=event_q)
 
         elif dev["type"] == "Siren":
-            devs[dev["name"]] = Siren(eui=dev["eui"], name=dev["name"], event_q=event_q)
+            devs[dev["name"]] = Siren(coordinator=coordinator, dev=dev, event_q=event_q)
 
         elif dev["type"] == "Button":
-            devs[dev["name"]] = Button(eui=dev["eui"], name=dev["name"], event_q=event_q)
+            devs[dev["name"]] = Button(coordinator=coordinator, dev=dev, event_q=event_q)
 
         else:
             LOGGER.error("Unknown device type in config.py %s for eui %s", dev["type"], dev["eui"])
@@ -387,22 +453,41 @@ class ZigbeeHome:
     """ Class for interacting with zigbee devices on 'home' network """
     def __init__(self, name, event_q):
 
+        self.coordinator = at.ZigbeeCmdNode(name="zb_home", port=cfg.HOME_ZB_PORT)
         self.name = name
         self.event_q = event_q
         self.last_battery_report = 0
 
-        home = at.ZigbeeCmdNode(name="zb_home", port=cfg.HOME_ZB_PORT)
-        self.device_list = build_device_dict(cfg.HOME_ZB_DEVICES, event_q=self.event_q)
+        self.device_list = build_device_dict(
+            coordinator=self.coordinator,
+            devices=cfg.HOME_ZB_DEVICES,
+            event_q=self.event_q
+        )
 
-        self.thread = threading.Thread(target=zb_update_worker, args=(home, self.device_list), daemon=True)
+        self.thread = threading.Thread(
+            target=zb_update_worker,
+            args=(self.coordinator, self.device_list),
+            daemon=True
+        )
         self.thread.start()
         self.thread_pool = [self.thread]
 
 
 def tests():
-    """ Entry point for tests """
+    """ Entry point for tests
 
-    ZigbeeHome(name="zb_home", event_q=queue.Queue())
+    Turn on siren strobe - get user to confirm it is working
+    Turn it off - get user to confirm it is off
+
+    Wait for freezer sensor temp
+    Wait for button press events
+    Wait for door open/close events
+
+    """
+
+    zb_home = ZigbeeHome(name="zb_home", event_q=queue.Queue())
+
+    zb_home.device_list["Siren"].start_warning()
 
     while True:
         time.sleep(1)

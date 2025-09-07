@@ -224,16 +224,16 @@ def button_event_action(event, args, sitt_group, home_devs, fsm_dict):
         voice.play(voice.build_delay_voice_strings(args))
 
     elif event["event"] == SystemEvents.BUTTON.BTN_LONG_PRESS:
-        LOGGER.info("Button long press: Making announcements and disabling alarms")
+        LOGGER.info("Button long press: Making announcements and enabling/disabling alarms")
 
         # Make announcements...
         if args.dhw:
             announce_dhw_level_action()
 
-        announce_freezer_temp_action(home_devs)
-
-        # Set the freezer alarm to disabled.  Will auto re-enable when temp is normal and sensor is online
+        # Announce the freezer temp and Set the freezer alarm to disabled.
+        # Will auto re-enable when temp is normal and sensor is online
         if args.freezer_alarm:
+            announce_freezer_temp_action(home_devs)
             freezer_alarm_fsm = fsm_dict["FreezerAlarmFSM"]
             if freezer_alarm_fsm.state.disabled:
                 voice.play(msgs="Enabling freezer alarm...")
@@ -242,14 +242,14 @@ def button_event_action(event, args, sitt_group, home_devs, fsm_dict):
                 voice.play(msgs="Disabling freezer alarm...")
                 freezer_alarm_fsm.state.enabled = True
 
-        # Toggle the security alarm override
+        # Toggle the security alarm state
         if args.security_alarm:
             security_alarm_fsm = fsm_dict["SecurityAlarmFSM"]
-
-            # Toggle the deactivated state
             if security_alarm_fsm.state.deactivated:
+                voice.play(msgs="Enabling security alarm...")
                 security_alarm_fsm.state.deactivated = False
             else:
+                voice.play(msgs="Disabling security alarm...")
                 security_alarm_fsm.state.deactivated = True
 
 
@@ -285,10 +285,9 @@ def security_event_action(event, home_devs, fsm_dict):
 
     elif event["event"] == cfg.SystemEvents.SECURITY.ALARM_DEACTIVATED:
         siren.stop_warning()
-        voice.play("Security alarm deactivated")
 
     elif event["event"] == cfg.SystemEvents.SECURITY.ALARM_ACTIVATED:
-        voice.play("Security alarm activated")
+        pass
 
     elif event["event"] == cfg.SystemEvents.SECURITY.ALARM_SENSOR_OPEN:
         security_fsm.state.trigger = True

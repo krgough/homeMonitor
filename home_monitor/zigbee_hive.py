@@ -391,7 +391,9 @@ class Group:
             if the group are ON then treat the group state as ON.
         """
         state = False
-        for node in self.nodes:
+        # This is a bit of a bodge.  Colour bulb can take up to 3s to respond so
+        # we determine the group state based on the sitt front light only.
+        for node in [node for node in self.nodes if node.name == "Sitt Front"]:
             if node.get_on_state():
                 state = True
         return state

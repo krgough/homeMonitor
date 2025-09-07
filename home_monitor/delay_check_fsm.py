@@ -141,7 +141,7 @@ class DelayCheckerFSM():
 # pylint: disable=too-few-public-methods
 class TestQueue():
     """ Test Queue Object """
-    def put(self, item):
+    def put(self, event, name):
         """ Puts an item in the queue """
 
 
