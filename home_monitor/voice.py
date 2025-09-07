@@ -87,4 +87,4 @@ def play(msgs: Union[str, List[str]]):
     # Play the file with mpg123
     with tempfile.NamedTemporaryFile(suffix='.mp3') as temp_file:
         tts.save(temp_file.name)
-        subprocess.run(['mpg123', '-f', '32000', '-q', temp_file.name], check=True)
+        subprocess.run(['mpg123', '-f', '10000', '-q', temp_file.name], check=True)
