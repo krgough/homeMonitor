@@ -271,7 +271,6 @@ def freezer_event_action(event, hive_devs: List[Union[zb_hive.BulbObject, zb_hiv
 
 def security_event_action(event, home_devs, fsm_dict):
     """ Take action based on security alarm events """
-    # TODO: Add sending emails.
     security_fsm = fsm_dict["SecurityAlarmFSM"]
     siren = home_devs["Siren"]
     if event["event"] == cfg.SystemEvents.SECURITY.ALARM_ARMED:
@@ -281,10 +280,15 @@ def security_event_action(event, home_devs, fsm_dict):
         pass
 
     elif event["event"] == cfg.SystemEvents.SECURITY.ALARM_TRIGGERED:
-        siren.start_warning()
+        siren.start_warning(duration=300)  # 5 minute warning
+        cfg.send_email(
+                subject="WARNING: Security Alarm Triggered!!",
+                body=f"{event['name']}: WARNING: Security Alarm Triggered!!"
+        )
 
     elif event["event"] == cfg.SystemEvents.SECURITY.ALARM_DEACTIVATED:
         siren.stop_warning()
+        security_fsm.state.trigger = False
 
     elif event["event"] == cfg.SystemEvents.SECURITY.ALARM_ACTIVATED:
         pass
@@ -301,8 +305,6 @@ def security_event_action(event, home_devs, fsm_dict):
 
 def device_event_action(event, args, fsm_dict):
     """ Take action based on device events """
-    # TODO: Add sending emails
-
     freezer_fsm = fsm_dict["FreezerAlarmFSM"]
     security_fsm = fsm_dict["SecurityAlarmFSM"]
     alarm_snsrs = ["Garage RHS", "Garage LHS"]
@@ -311,8 +313,10 @@ def device_event_action(event, args, fsm_dict):
         if event["name"] == "Freezer Sensor":
             freezer_fsm.state.sensor_online = False
         elif args.device_name in alarm_snsrs:
-            pass
-            # TODO: Handle alarm sensor offline event
+            cfg.send_email(
+                subject=f"Security Alarm Sensor Offline: {event['name']}",
+                body=f"The {event['name']} sensor has gone offline"
+            )
 
     elif event["event"] == cfg.SystemEvents.DEVICE.DEVICE_ONLINE:
         if event["name"] == "Freezer Sensor":
@@ -324,7 +328,10 @@ def device_event_action(event, args, fsm_dict):
         if event["name"] == "Freezer Sensor":
             freezer_fsm.state.temp_high = True
         elif event["name"] in alarm_snsrs:
-            pass
+            cfg.send_email(
+                subject="WARNING: Freezer Temperature HIGH!!",
+                body=f"The {event['name']} sensor temperature is high!"
+            )
 
     elif event["event"] == cfg.SystemEvents.DEVICE.DEVICE_TEMP_NORMAL:
         if event["name"] == "Freezer Sensor":

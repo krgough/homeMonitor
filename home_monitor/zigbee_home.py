@@ -184,7 +184,7 @@ class ZigbeeDevice:
         LOGGER.info('Putting event %s on queue from %s', event, self.name)
         self._event_q.put(event, self.name)
 
-    def exec_zb_cmd(self, zb_func, *args):
+    def exec_zb_cmd(self, zb_func, **kwargs):
         """ Wrapper for at commands
 
             In order to handle offline devices or other command failures we wrap the
@@ -220,7 +220,7 @@ class ZigbeeDevice:
             # on the next command attempt.
             resp_value = None
             if self.node:
-                resp_status, _, resp_value = zb_func(self.node, *args)
+                resp_status, _, resp_value = zb_func(node=self.node, **kwargs)
                 if not resp_status:
                     LOGGER.error("Error in %s", zb_func)
                     self.node_id = None
@@ -357,31 +357,23 @@ class Siren(ZigbeeDevice):
                 self.put_event(SystemEvents.DEVICE.DEVICE_ONLINE)
                 LOGGER.info("%s: online", self.name)
 
-    def start_warning(self):
+    def start_warning(self, duration=60):
         """ Start the siren warning """
         LOGGER.warning("%s: siren warning started", self.name)
         self.warning_state = True
         self.exec_zb_cmd(
             self.coordinator.iaswd_cmds.start_warning,
-            {
-                "node": self.node,
-                "mode": zcl.WarningMode.STOP,
-                "sound_level": zcl.SirenLevel.LOW,
-                "strobe_level": zcl.SirenLevel.HIGH,
-                "duration": 5
-            }
+            mode=zcl.WarningMode.STOP,
+            sound_level=zcl.SirenLevel.LOW,
+            strobe_level=zcl.SirenLevel.HIGH,
+            duration=duration
         )
 
     def stop_warning(self):
         """ Stop the siren warning """
         LOGGER.warning("%s: siren warning stopped", self.name)
         self.warning_state = False
-        self.exec_zb_cmd(
-            self.coordinator.iaswd_cmds.stop_warning,
-            {
-                "node": self.node,
-            }
-        )
+        self.exec_zb_cmd(self.coordinator.iaswd_cmds.stop_warning)
 
 
 class Button(ZigbeeDevice):
