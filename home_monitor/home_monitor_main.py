@@ -492,3 +492,5 @@ if __name__ == "__main__":
     logging.getLogger("zigbeetools").setLevel(logging.INFO)
     logging.getLogger("home_monitor.train_times").setLevel(logging.INFO)
     main()
+
+# TODO: Move functions from config.py to utils.py so we can commit them.
