@@ -288,7 +288,6 @@ def security_event_action(event, home_devs, fsm_dict):
 
     elif event["event"] == cfg.SystemEvents.SECURITY.ALARM_DEACTIVATED:
         siren.stop_warning()
-        security_fsm.state.trigger = False
 
     elif event["event"] == cfg.SystemEvents.SECURITY.ALARM_ACTIVATED:
         pass
@@ -297,7 +296,7 @@ def security_event_action(event, home_devs, fsm_dict):
         security_fsm.state.trigger = True
 
     elif event["event"] == cfg.SystemEvents.SECURITY.ALARM_SENSOR_CLOSED:
-        pass
+        security_fsm.state.trigger = False
 
     elif event["event"] == cfg.SystemEvents.SECURITY.ALARM_SENSOR_OFFLINE:
         pass

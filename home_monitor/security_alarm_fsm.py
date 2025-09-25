@@ -123,9 +123,6 @@ class Triggered(State):
         LOGGER.warning("ALARM TRIGGERED. SIREN ACTIVATED")
         self.event_put(cfg.SecurityEvents.ALARM_TRIGGERED)
 
-        # Cancel the trigger
-        self.trigger = False
-
     def on_event(self):
         """Handle events when the alarm is triggered"""
         schedule_state = self.schedule_state()

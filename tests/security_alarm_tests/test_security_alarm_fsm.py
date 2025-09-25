@@ -94,9 +94,9 @@ def test():
     time.sleep(2)
     assert isinstance(alarm.state, Deactivated)
 
-    LOGGER.info("Re-activate during TRIGGERED")
-    alarm.state.toggle_deactivate()
+    LOGGER.info("Re-activate during ARMED period while TRIGGERED is set")
     alarm.state.trigger = True
+    alarm.state.toggle_deactivate()
     time.sleep(2)
     assert isinstance(alarm.state, Triggered)
 
