@@ -438,7 +438,7 @@ def main():
     hive_devs = {"hive_bulb": hive_bulb, "hive_sitt_group": hive_sitt_group}
 
     # Start the Home Zigbee threads
-    home = zb_home.ZigbeeHome(name="zb_home", event_q=system_event_q)
+    home = zb_home.ZigbeeHome(name="Home Zigbee", event_q=system_event_q)
 
     # Start the FSMs
     freezer_alarm_fsm = FreezerAlarmFSM(name="FreezerAlarmFSM", event_q=system_event_q)
