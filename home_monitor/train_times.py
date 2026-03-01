@@ -286,8 +286,9 @@ def get_departures(from_crs, to_crs):
 def get_delays(from_crs, to_crs):
     """Get Departure Delays"""
     departures = get_departures(from_crs, to_crs)
-    delays = [d for d in departures if d['etd'] != "On time"]
-    return delays
+    if departures:
+        return [d for d in departures if d['etd'] != "On time"]
+    return ["NO_SERVICES_FOUND"]
 
 
 def main():

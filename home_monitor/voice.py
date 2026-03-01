@@ -30,43 +30,49 @@ def build_delay_voice_strings(args):
     to_station = tt.get_station_name(crs_code=args.to_station)
     from_station = tt.get_station_name(crs_code=args.from_station)
 
-    for delay in delays:
-        voice_string = (
-            f"The {delay['std']} from {from_station} to {to_station} is "
-        )
-
-        if delay["isCancelled"]:
-            if delay["cancelReason"]:
-                voice_string += f"cancelled. {delay['cancelReason']}."
-            else:
-                voice_string += "cancelled."
-        else:
-            voice_string += "delayed"
-
-            try:
-                etd = timestamp_from_time_string(delay["etd"])
-                std = timestamp_from_time_string(delay["std"])
-                delay_time = int((etd - std) / 60)
-            # ValueError can occur if there's no colon in the time HH:MM
-            # AttributeError occurs if any vars are None
-            except (ValueError, AttributeError):
-                LOGGER.error("Could not parse etd|std from the delay")
-                LOGGER.error(delay)
-                delay_time = None
-
-            if delay_time:
-                voice_string += f" by {delay_time} minutes."
-            else:
-                voice_string += "."
-
-            if delay["delayReason"]:
-                voice_string += f" {delay['delayReason']}."
-
-        voice_strings.append(voice_string)
+    LOGGER.debug("Delays: %s", delays)
 
     # Null voice string for no-delays situation
     if not delays:
         voice_strings.append(f"No delays listed for trains from {from_station} to {to_station}.")
+
+    elif delays[0] == "NO_SERVICES_FOUND":
+        voice_strings.append(f"No services found from {from_station} to {to_station}.")
+
+    else:
+        for delay in delays:
+            voice_string = (
+                f"The {delay['std']} from {from_station} to {to_station} is "
+            )
+
+            if delay["isCancelled"]:
+                if delay["cancelReason"]:
+                    voice_string += f"cancelled. {delay['cancelReason']}."
+                else:
+                    voice_string += "cancelled."
+            else:
+                voice_string += "delayed"
+
+                try:
+                    etd = timestamp_from_time_string(delay["etd"])
+                    std = timestamp_from_time_string(delay["std"])
+                    delay_time = int((etd - std) / 60)
+                # ValueError can occur if there's no colon in the time HH:MM
+                # AttributeError occurs if any vars are None
+                except (ValueError, AttributeError):
+                    LOGGER.error("Could not parse etd|std from the delay")
+                    LOGGER.error(delay)
+                    delay_time = None
+
+                if delay_time:
+                    voice_string += f" by {delay_time} minutes."
+                else:
+                    voice_string += "."
+
+                if delay["delayReason"]:
+                    voice_string += f" {delay['delayReason']}."
+
+        voice_strings.append(voice_string)
 
     return voice_strings
 
