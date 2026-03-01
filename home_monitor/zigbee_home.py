@@ -484,6 +484,7 @@ class ZigbeeHome:
 
         self.thread = threading.Thread(
             target=zb_update_worker,
+            name=self.name,
             args=(self.coordinator, self.device_list),
             daemon=True
         )

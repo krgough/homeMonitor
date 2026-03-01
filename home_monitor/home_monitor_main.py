@@ -469,6 +469,9 @@ def main():
         thread_pool
     )
 
+    for thread in thread_pool:
+        LOGGER.info("Started thread: %s", thread.name)
+
     if args.use_gpios:
         btn = gpiozero.Button(4)
         btn.when_pressed = lambda: system_event_q.put(cfg.SystemEvents.GPIO.BUTTON_PRESSED, "GPIO_BUTTON")

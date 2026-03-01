@@ -173,7 +173,7 @@ class SecurityAlarmFSM():
             schedule=schedule
         )
 
-        fsm_thread = threading.Thread(target=fsm_worker, args=(self,), daemon=True)
+        fsm_thread = threading.Thread(target=fsm_worker, name=self.name, args=(self,), daemon=True)
         fsm_thread.start()
         self.thread_pool = [fsm_thread]
 
