@@ -149,6 +149,9 @@ def handle_message(coordinator: at.ZigbeeCmdNode, msg_data: dict, device_list: l
             LOGGER.debug("Updating device %s zone_status: %s", dev.name, msg_data)
             dev.zone_status_event(msg_data["zone_status"])
 
+        elif msg_data['msg_type'] == "CHECKIN":
+            LOGGER.debug("Updating device %s checkin event", dev.name)
+            dev.checkin_event()
 
 # pylint: disable=too-few-public-methods,too-many-instance-attributes
 # pylint: disable=too-many-arguments,too-many-positional-arguments
@@ -173,14 +176,19 @@ class ZigbeeDevice:
         self.node_id = None  # We will set this when we dicover the node
         self.node = None  # Placeholder until we find the node
 
+    def checkin_event(self):
+        """Handle checkin events"""
+        LOGGER.info("%s: Checkin", self.name)
+
     def attribute_report_event(self, cluster, attribute, value):
         """Handle attribute report events"""
 
     def zone_status_event(self, zone_status):
         """Handle zone status events"""
+        LOGGER.info("%s: Zone status event: %s", self.name, zone_status)
 
     def put_event(self, event):
-        """ Put and event on the event queue """
+        """ Put an event on the event queue """
         LOGGER.info('Putting event %s on queue from %s', event, self.name)
         self._event_q.put(event, self.name)
 
@@ -248,19 +256,30 @@ class WindowDoorSensor(ZigbeeDevice):
     def online_offline_event(self):
         """Set the online state of the device"""
 
+        last_report = max(
+            self.last_checkin,
+            self.last_battery_report,
+            self.last_temperature_report,
+        )
+
         # Transition to offline
         if self.online:
-            if self.last_temperature_report < (time.time() - OFFLINE_TIMEOUT):
+            if last_report < (time.time() - OFFLINE_TIMEOUT):
                 self.online = False
                 self.event_q.put(SystemEvents.DEVICE.DEVICE_OFFLINE, self.name)
                 LOGGER.warning("%s: offline", self.name)
 
         # Transition to online
         else:
-            if self.last_temperature_report >= (time.time() - OFFLINE_TIMEOUT):
+            if last_report >= (time.time() - OFFLINE_TIMEOUT):
                 self.online = True
                 self.put_event(SystemEvents.DEVICE.DEVICE_ONLINE)
                 LOGGER.info("%s: online", self.name)
+    
+    def checkin_event(self):
+        """Set the last checkin time of the device"""
+        self.last_checkin = time.time()
+        LOGGER.info("%s: Checkin event", self.name)
 
     def attribute_report_event(self, cluster, attribute, value):
         """Set the battery voltage of the device"""
@@ -342,17 +361,24 @@ class Siren(ZigbeeDevice):
             LOGGER.error("Unhandled attribute update for %s: %s, %s = %s", self.name, cluster, attribute, value)
 
     def online_offline_event(self):
-        """ Set the online state of the device """
+        """ Set the online state of the device based on the last attribute report time """
+
+        last_report = max(
+            self.last_battery_report,
+            self.last_battery_temperature_report,
+            self.last_battery_percentage_remaining_report
+        )
+
         # Transition to offline
         if self.online:
-            if self.last_battery_report < (time.time() - OFFLINE_TIMEOUT):
+            if last_report < (time.time() - OFFLINE_TIMEOUT):
                 self.online = False
                 self.put_event(SystemEvents.DEVICE.DEVICE_OFFLINE)
                 LOGGER.warning("%s: offline", self.name)
 
         # Transition to online
         else:
-            if self.last_battery_report >= (time.time() - OFFLINE_TIMEOUT):
+            if last_report >= (time.time() - OFFLINE_TIMEOUT):
                 self.online = True
                 self.put_event(SystemEvents.DEVICE.DEVICE_ONLINE)
                 LOGGER.info("%s: online", self.name)
