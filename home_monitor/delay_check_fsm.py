@@ -32,11 +32,14 @@ class State:
     def on_event(self):
         """Handle events that are delegated to this State."""
 
-        delays = tt.get_delays(self.from_station, self.to_station)
         sched_on = cfg.schedule_check(cfg.TRAIN_DELAY_INDICATION_SCHEDULE)
 
-        for delay in delays:
-            LOGGER.debug(delay)
+        if sched_on:
+            delays = tt.get_delays(self.from_station, self.to_station)
+            for delay in delays:
+                LOGGER.debug(delay)
+        else:
+            delays = None
 
         return delays, sched_on
 
@@ -116,7 +119,7 @@ class DelayCheckerFSM():
             to_station=self.to_station
         )
 
-        worker_thread = threading.Thread(target=fsm_worker, args=(self,), daemon=True)
+        worker_thread = threading.Thread(target=fsm_worker, name=self.name, args=(self,), daemon=True)
         worker_thread.start()
         self.thread_pool = [worker_thread]
 
