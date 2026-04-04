@@ -414,7 +414,7 @@ def check_usb_dongles():
 def universal_thread_exception_handler(args):
     """Universal thread exception handler to catch any exceptions in threads and log them"""
     # args.exc_type, args.exc_value, args.exc_traceback, args.thread
-    LOGGER.error("Exception in thread %s: %s", args.thread.name, args.exc_value)
+    LOGGER.error("Exception in thread %s: %s", args.thread.name, args.exc_value, exc_info=(args.exc_type, args.exc_value, args.exc_traceback))
 
 
 def start_thread(thread_func, args, thread_name, thread_pool):
