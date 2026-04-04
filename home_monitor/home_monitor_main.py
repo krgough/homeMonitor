@@ -411,8 +411,14 @@ def check_usb_dongles():
     return True
 
 
+def universal_thread_exception_handler(args):
+    """Universal thread exception handler to catch any exceptions in threads and log them"""
+    # args.exc_type, args.exc_value, args.exc_traceback, args.thread
+    LOGGER.error("Exception in thread %s: %s", args.thread.name, args.exc_value, exc_info=(args.exc_type, args.exc_value, args.exc_traceback))
+
+
 def start_thread(thread_func, args, thread_name, thread_pool):
-    """Start the thread and return it"""
+    """Start the thread and add it to the thread pool list for monitoring"""
     thread = threading.Thread(target=thread_func, args=args, name=thread_name, daemon=True)
     thread.start()
     LOGGER.info("%s thread started.", thread_name)
@@ -429,6 +435,8 @@ def main():
 
     args = get_args()
     thread_pool = []
+    threading.excepthook = universal_thread_exception_handler
+
     system_event_q = cfg.SystemEventQueue()
 
     # Start the Hive Zigbee threads
@@ -451,17 +459,19 @@ def main():
         to_station=args.to_station
     )
 
-    # Get a list of all threads so we can monitor them
+    # Add all the above threads to the thread_pool list so we can monitor them
     fsm_dict = {
         "FreezerAlarmFSM": freezer_alarm_fsm,
         "SecurityAlarmFSM": security_alarm_fsm,
-        "DelayCheckerFSM": delay_checker_fsm
+        "DelayCheckerFSM": delay_checker_fsm,
+        "Hive Zigbee": hive,
+        "Home Zigbee": home
     }
-    for device in list(fsm_dict.values()) + [hive, home]:
+    for device in list(fsm_dict.values()):
         for thread in device.thread_pool:
             thread_pool.append(thread)
 
-    # # Start the event checker thread
+    # Start the event checker thread
     start_thread(
         system_event_handler,
         (args, system_event_q, home.device_list, hive_devs, fsm_dict),
