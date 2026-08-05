@@ -3,11 +3,16 @@
 Configuration file for home_monitor
 Set your devices/schedules and other parameters here.
 
-COPY THIS FILE TO `config.py` and edit that version.
-
 """
+
+from enum import Enum
 import datetime
+import queue
+import subprocess
+
 import pytz
+
+USER_EMAIL = "your-email"
 
 BELL_SOUND = None
 BELL_BUTTON_ID = None
@@ -16,7 +21,7 @@ INDICATOR_BULB = "Sitt Colour"
 TIMEZONE = "Europe/London"
 TRAIN_DELAY_INDICATION_SCHEDULE = [("05:30", "07:00")]
 FREEZER_SENSOR_OFFLINE_SCHEDULE = [("08:00", "22:00")]
-HIVE_ALARM_ON_SCHEDULE = [("23:00", "05:00")]
+SECURITY_ALARM_ON_SCHEDULE = [("23:00", "05:00")]
 
 FREEZER_TEMP_THOLD = -10  # Freezer temperature alert threshold
 SENSOR_OFFLINE_TIME = 60 * 60  # Time in seconds before we declare offline
@@ -27,7 +32,6 @@ LED_PORT = "/dev/ttyS0"
 LED_BAUD = 115200
 GPIO_CHANNEL = 4
 
-
 # Zigbee dongles need to be named properly so we don't confuse the two.
 # The names (USB0, USB1) get assigned randomly at boot so we need to use
 # the /dev/serial/by-id/ path to correctly identify the dongles.
@@ -35,39 +39,152 @@ GPIO_CHANNEL = 4
 ZB_BAUD = 115200
 
 # Zigbee Dongle for Button Network
-# ZB_PORT = "/dev/serial/by-id/usb-Silicon_Labs_Telegesis_USB_Device_01001DAD-if00-port0"
-ZB_PORT = "/dev/serial/by-path/platform-fd500000.pcie-pci-0000:01:00.0-usb-0:1.2:1.0-port0"
-BUTTON_NODE_ID = "7967"  # Black Button
+HOME_ZB_PORT = "/dev/serial/by-id/your-button-network-dongle-id"
 
 # Zigbee Dongle for Hive Network
-# HIVE_ZB_PORT = "/dev/serial/by-id/usb-Silicon_Labs_Telegesis_USB_Device_04000A0B-if00-port0"
-HIVE_ZB_PORT = "/dev/serial/by-path/platform-fd500000.pcie-pci-0000:01:00.0-usb-0:1.3:1.0-port0"
-HIVE_EUI = "000D6F000C44F290"
+HIVE_ZB_PORT = "/dev/serial/by-id/your-hive-network-dongle-id"
+HIVE_EUI = "eui-of-your-hive-dongle"
+
+
+# Devices on the home network (alternative network to Hive)
+HOME_ZB_DEVICES = [
+    {
+        "eui": "00124B00160561DE",
+        "ep_id": "01",
+        "name": "Garage RHS",
+        "type": "WindowDoorSensor",
+        "alarm": True,
+        "freezer": False
+    },
+    {
+        "eui": "00124B001605777F",
+        "ep_id": "01",
+        "name": "Garage LHS",
+        "type": "WindowDoorSensor",
+        "alarm": True,
+        "freezer": False
+    },
+    {
+        "eui": "00124B000DEF311B",
+        "ep_id": "01",
+        "name": "Freezer Sensor",
+        "type": "WindowDoorSensor",
+        "alarm": False,
+        "freezer": True
+    },
+    {
+        "eui": "00158D0001CB141A",
+        "ep_id": "01",
+        "name": "Button",
+        "type": "Button"
+    },
+    {
+        "eui": "CCCCCCFFFEB99522",
+        "ep_id": "01",
+        "name": "Siren",
+        "type": "Siren"
+    },
+]
+
+# Devices on the Hive network
 
 # This is the group we turn on/off with the button press
-SITT_GROUP = ["Sitt Front", "Sitt Rear", "Sitt Colour"]
-
+HIVE_SITT_GROUP = ["Sitt Front", "Sitt Rear", "Sitt Colour"]
 
 # Sitt Colour is the indicator bulb for the train delay or freezer alerts
-DEVS = {
-    "Sitt Colour": {"eui": "00158D00012E2189", "ep": "01"},
-    "Sitt Front": {"eui": "00158D00012E2CF1", "ep": "01"},
-    "Sitt Rear": {"eui": "001E5E09021AEBD6", "ep": "09"},
-    "Stair Plug": {"eui": "001E5E09020F2F53", "ep": "09"},
-    "Bed LEDs": {"eui": "001E5E0902171636", "ep": "09"},
-    "Garage Plug": {"eui": "001E5E09020DA01E", "ep": "09"},
-    "Temperature Sensor": {"eui": "00124B000DEF311B", "ep": "06"},
-}
+HIVE_DEVS = [
+    {"eui": "00158D00012E2189", "ep": "01", "name": "Sitt Colour"},
+    {"eui": "00158D00012E2CF1", "ep": "01", "name": "Sitt Front"},
+    {"eui": "001E5E09021AEBD6", "ep": "09", "name": "Sitt Rear"},
+    {"eui": "001E5E09020F2F53", "ep": "09", "name": "Stair Plug"},
+    {"eui": "001E5E0902171636", "ep": "09", "name": "Bed LEDs"},
+    {"eui": "001E5E09020DA01E", "ep": "09", "name": "Garage Plug"},
+    {"eui": "00124B000DEF311B", "ep": "06", "name": "Temperature Sensor"},
+]
 
 
-def get_dev(dev_name):
-    """Get device by name
+class FreezerEvents(Enum):
+    """ Freezer alarm system events """
+    FREEZER_ALARM_TEMP_NORMAL = "freezer_alarm_temp_normal"
+    FREEZER_ALARM_TEMP_HIGH = "freezer_alarm_temp_high"
+    FREEZER_ALARM_DISABLED = "freezer_alarm_disabled"
+    FREEZER_ALARM_SENSOR_OFFLINE_DAY = "freezer_alarm_sensor_offline_day"
+    FREEZER_ALARM_SENSOR_OFFLINE_NIGHT = "freezer_alarm_sensor_offline_night"
 
-    Get the wanted device from DEVS and return a dict
-    Add the name of the device to the dict.
+
+class SecurityEvents(Enum):
+    """ Security system events """
+    ALARM_SENSOR_OPEN = "alarm_sensor_open"
+    ALARM_SENSOR_CLOSED = "alarm_sensor_closed"
+    ALARM_SENSOR_OFFLINE = "alarm_sensor_offline"
+    ALARM_ARMED = "alarm_armed"
+    ALARM_DISARMED = "alarm_disarmed"
+    ALARM_TRIGGERED = "alarm_triggered"
+    ALARM_DEACTIVATED = "alarm_deactivated"
+    ALARM_ACTIVATED = "alarm_activated"
+
+
+class DeviceEvents(Enum):
+    """ Device system events """
+    DEVICE_OFFLINE = "device_offline"
+    DEVICE_ONLINE = "device_online"
+    DEVICE_TEMP_HIGH = "device_temp_high"
+    DEVICE_TEMP_NORMAL = "device_temp_normal"
+
+
+class ButtonEvents(Enum):
+    """ Button press system events """
+    BTN_SHORT_PRESS = "btn_short_press"
+    BTN_DOUBLE_PRESS = "btn_double_press"
+    BTN_LONG_PRESS = "btn_long_press"
+
+
+class TrainEvents(Enum):
+    """ Train delay system events """
+    DELAYS = "delays"
+    NO_DELAYS = "no_delays"
+
+
+class GPIOEvents(Enum):
+    """ GPIO system events """
+    BUTTON_PRESSED = "button_pressed"
+    BUTTON_RELEASED = "button_released"
+
+
+class SystemEvents:
+    """ System Events that require an action """
+    FREEZER = FreezerEvents
+    SECURITY = SecurityEvents
+    DEVICE = DeviceEvents
+    BUTTON = ButtonEvents
+    TRAIN = TrainEvents
+    GPIO = GPIOEvents
+
+
+class SystemEventQueue:
+    """ Class which handles the system event queue and esures correct format of items """
+
+    def __init__(self):
+        self.queue = queue.Queue()
+
+    def put(self, event, name):
+        """ Put an event onto the queue """
+        self.queue.put({"event": event, "name": name})
+
+    def get(self):
+        """ Get an event from the queue """
+        return self.queue.get()
+
+    def empty(self):
+        """ Check if the queue is empty """
+        return self.queue.empty()
+
+
+def get_hive_dev(dev_name):
+    """Get device by names
     """
-    dev = DEVS.get(dev_name)
-    dev["name"] = dev_name
+    # search a list of dicts to find the device with matching name
+    dev = next((d for d in HIVE_DEVS if d["name"] == dev_name), None)
     return dev
 
 
@@ -108,6 +225,11 @@ def schedule_check(schedule, check_time=None):
     We also handle the case where a slot straddles midnight.
     """
     in_sched = False
+
+    # If check time is not given, default to current London time.
+    check_time = check_time or local_time()
+    check_time = check_time.time()
+
     for time_slot in schedule:
         begin_time = datetime.time(
             int(time_slot[0].split(":")[0]), int(time_slot[0].split(":")[1])
@@ -117,9 +239,6 @@ def schedule_check(schedule, check_time=None):
             int(time_slot[1].split(":")[0]), int(time_slot[1].split(":")[1])
         )
 
-        # If check time is not given, default to current London time.
-        check_time = check_time or local_time()
-        check_time = check_time.time()
         if begin_time < end_time:
             if begin_time <= check_time <= end_time:
                 in_sched = True
@@ -131,6 +250,14 @@ def schedule_check(schedule, check_time=None):
 
     # print(schedule, check_time, in_sched)
     return in_sched
+
+
+def send_email(subject, body, to_addr=USER_EMAIL):
+    """Send an email using the system mail command"""
+    cmd = ["/usr/bin/mail", "-s", subject, to_addr]
+    with subprocess.Popen(cmd, stdin=subprocess.PIPE) as p:
+        p.communicate(input=body.encode())
+    return p.returncode
 
 
 def tests():
@@ -173,7 +300,7 @@ def tests():
     print(local_time())
     schedule_check(sched)
 
-    sched = HIVE_ALARM_ON_SCHEDULE
+    sched = SECURITY_ALARM_ON_SCHEDULE
     test_list = [
         {"dt": (2022, 1, 1, 5, 59), "tz": lond, "result": True},
         {"dt": (2022, 1, 1, 6, 1), "tz": lond, "result": False},
