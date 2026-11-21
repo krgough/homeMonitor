@@ -2,28 +2,28 @@
 """
 
 Pair the device manually using the command line.  at+pjoin:ff
-Grab the EUI of the device, then use this script to set the cicie
+Grab the EUI of the device
+
+For security devices we need to set the CIE address to the coordinator EUI.  This is done by writing to the CIE address attribute in the IAS Zone cluster.
 
 Button pairing notes:
 
-Bind to on/off cluster.
-Write to the button press type cfg attribute to turn on all button press types.
+- Bind to on/off cluster.
+- Write to the button press type cfg attribute to turn on all button press types.
 
-# Only need these two
 at+bind:<nodeId>,3,<BUTTON EUI>,01,0006,<COORD EUI>,01
-
 at+rawzcl:<nodeId>,01,0006,0C3910010200FD181C
                            | |   | | |   | |
                            | |   | | |   | 1C = Bits2,3,4 = Short,Double,Long Press
-                           | |   | | |   18 = Attrribute type
+                           | |   | | |   18 = Attribute type
                            | |   | | FD00 = Attribute ID
                            | |   | 02 = Command ID (write attribute)
                            | |   01 = Sequence number
                            | 1039 = Manufacturer code
                            0C = Frame Control, General Control frame, Dir serv to client, manufacturer specific
 
-# Set attribute report configuration for the custom attribute
-# (note it's a server to client)
+These are not required but kept here for reference
+Set attribute report configuration for the custom attribute (note it's a server to client)
 at+cfgrpt:<nodeId>,,0,0001,0,0020,20,0E10,0E10,01
 at+rawzcl:<nodeId>,0006,0C391001060003FD1801000000
 
@@ -59,7 +59,7 @@ def get_args():
     )
 
     parser.add_argument(
-        '-d', '--device', choices=['siren', 'wds'], required=True,
+        '-d', '--device', choices=['siren', 'wds', 'button'], required=True,
         help='Device type to pair.'
     )
 
@@ -270,6 +270,55 @@ def siren_pairing(coordinator: at.ZigbeeCmdNode, node_id):
     print("CIE EUI set successfully.")
 
 
+def button_pairing(coordinator: at.ZigbeeCmdNode, node_id, node_eui):
+    """ Pair the button device with the coordinator """
+    # Get the EUIs for the co-ordinator
+    resp_state, resp_code, resp = coordinator.at_cmds.get_eui("0000", "0000")
+    if resp_state:
+        coo_eui = resp
+        print(f"Coordinator EUI: {coo_eui}")
+    else:
+        print("Coordinator EUI not found")
+        sys.exit()
+
+    # Set a binding on the on/off cluster so we can get the button press events
+    # at+bind:<nodeId>,3,<BUTTON EUI>,01,0006,<COORD EUI>,01
+    print(f"Setting binding for button device {node_id} to coordinator {coo_eui}")
+    resp_state, resp_code, resp = coordinator.at_cmds.set_binding(
+        node_id=node_id,
+        binding=at.bind_object(
+            src_addr=node_eui,
+            src_ep="01",
+            cluster="On/Off Cluster",
+            dst_addr=coo_eui,
+            dst_ep="01"
+        )
+    )
+    if not resp_state or resp_code != zcl.STATUS_CODES['SUCCESS']:
+        print(f"Error setting binding: {resp}")
+        return
+    print("Binding set successfully.")
+
+    # Set the button press type configuration attribute to enable all button press types
+    # at+rawzcl:<nodeId>,01,0006,0C3910010200FD181C
+    print(f"Setting button press type configuration for button device {node_id}")
+    node = at.node_object(node_id=node_id, ep_id="01", manuf_id=1039, eui=node_eui)
+    cluster = at.cluster_object("On/Off Cluster")
+    expected_response = f'WRITEMATTR:{node.node_id},{node.ep_id},{node.manuf_id},{cluster.id},,(..)'
+    resp_state, resp_code, resp = coordinator.at_cmds.set_rawzcl(
+        node=node,
+        cluster=cluster,
+        payload=f"0C3910010200FD181C",
+        expected_response=expected_response
+    )
+    if not resp_state or resp_code != zcl.STATUS_CODES['SUCCESS']:
+        print(f"Error setting button press type configuration: {resp}")
+        return
+    print("Button press type configuration set successfully.")
+
+    print("Button device paired successfully. Check you are receiving button press events.")
+
+
 def get_node_id(coordinator:  at.ZigbeeCmdNode, dev_type: Literal["FFD", "SED"]) -> Optional[str]:
     """ Open the network to allow the device to join and get the node id of the joining device """
 
@@ -279,10 +328,12 @@ def get_node_id(coordinator:  at.ZigbeeCmdNode, dev_type: Literal["FFD", "SED"])
     # Wait for a device to join and get the node ID
     result = coordinator.wait_for_message(msgs=[f"{dev_type}:"], timeout=120)
     if result:
-        node_id = result.split(",")[1]
+        eui, node_id = result.split(",")
+        eui = eui.split(":")[1]
     else:
+        eui = None
         node_id = None
-    return node_id
+    return {"eui": eui, "id": node_id}
 
 
 def main():
@@ -298,20 +349,20 @@ def main():
     coordinator = at.ZigbeeCmdNode(name="zb_home", port=args.port, baud=args.baud)
 
     if not args.node_id:
-        node_id = get_node_id(coordinator=coordinator, dev_type=args.dev_type)
-    else:
-        node_id = None
+        node = get_node_id(coordinator=coordinator, dev_type=args.dev_type)
 
-    if node_id:
-        print(f"NodeId = {node_id}")
+    if node['id']:
+        print(f"NodeId = {node['id']}, EUI = {node['eui']}")
     else:
         print("No Node ID found.  Exiting.")
         return
 
     if args.device == 'siren':
-        siren_pairing(coordinator=coordinator, node_id=node_id)
+        siren_pairing(coordinator=coordinator, node_id=node['id'])
     elif args.device == 'wds':
-        wds_pairing(coordinator=coordinator, node_id=node_id)
+        wds_pairing(coordinator=coordinator, node_id=node['id'])
+    elif args.device == 'button':
+        button_pairing(coordinator=coordinator, node_id=node['id'], node_eui=node['eui'])
 
 
 if __name__ == "__main__":
